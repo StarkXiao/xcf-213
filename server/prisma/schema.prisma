@@ -1,0 +1,152 @@
+// 都市刑侦案件线索管理平台 - 数据模型
+// 作者：刑侦系统开发组
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 案件信息表
+model Case {
+  id           String     @id @default(uuid())
+  caseNumber   String     @unique
+  title        String
+  description  String
+  caseType     String
+  status       String
+  priority     String
+  location     String?
+  occurTime    DateTime?
+  reportTime   DateTime?
+  caseManager  String?
+  department   String?
+  summary      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  clues        Clue[]
+  evidences    Evidence[]
+  casePersons  CasePerson[]
+}
+
+// 人员信息表
+model Person {
+  id           String     @id @default(uuid())
+  name         String
+  gender       String?
+  age          Int?
+  idCard       String?    @unique
+  phone        String?
+  address      String?
+  occupation   String?
+  description  String?
+  avatar       String?
+  personType   String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  casePersons  CasePerson[]
+  cluePersons  CluePerson[]
+  relationsAsSubject PersonRelation[] @relation("SubjectRelations")
+  relationsAsObject  PersonRelation[] @relation("ObjectRelations")
+}
+
+// 案件-人员关联表
+model CasePerson {
+  id        String   @id @default(uuid())
+  caseId    String
+  personId  String
+  role      String
+  note      String?
+  createdAt DateTime @default(now())
+
+  case      Case     @relation(fields: [caseId], references: [id])
+  person    Person   @relation(fields: [personId], references: [id])
+
+  @@unique([caseId, personId])
+}
+
+// 人员关系表
+model PersonRelation {
+  id            String   @id @default(uuid())
+  subjectId     String
+  objectId      String
+  relationType  String
+  description   String?
+  caseId        String?
+  createdAt     DateTime @default(now())
+
+  subjectPerson Person @relation("SubjectRelations", fields: [subjectId], references: [id])
+  objectPerson  Person @relation("ObjectRelations", fields: [objectId], references: [id])
+  case          Case?  @relation(fields: [caseId], references: [id])
+}
+
+// 线索信息表
+model Clue {
+  id          String     @id @default(uuid())
+  caseId      String?
+  clueNumber  String     @unique
+  title       String
+  content     String
+  clueType    String
+  source      String
+  credibility String
+  importance  String
+  status      String
+  location    String?
+  findTime    DateTime?
+  informant   String?
+  handler     String?
+  note        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  case        Case?      @relation(fields: [caseId], references: [id])
+  evidences   Evidence[]
+  cluePersons CluePerson[]
+}
+
+// 线索-人员关联表
+model CluePerson {
+  id        String   @id @default(uuid())
+  clueId    String
+  personId  String
+  relation  String
+  note      String?
+  createdAt DateTime @default(now())
+
+  clue      Clue     @relation(fields: [clueId], references: [id])
+  person    Person   @relation(fields: [personId], references: [id])
+
+  @@unique([clueId, personId])
+}
+
+// 证据附件表
+model Evidence {
+  id          String     @id @default(uuid())
+  caseId      String?
+  clueId      String?
+  evidenceNumber String  @unique
+  name        String
+  description String?
+  type        String
+  filePath    String
+  fileName    String
+  fileSize    Int?
+  mimeType    String?
+  hash        String?
+  collector   String?
+  collectTime DateTime?
+  location    String?
+  status      String
+  note        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  case        Case?      @relation(fields: [caseId], references: [id])
+  clue        Clue?      @relation(fields: [clueId], references: [id])
+}

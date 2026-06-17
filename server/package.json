@@ -1,0 +1,33 @@
+{
+  "name": "criminal-investigation-server",
+  "version": "1.0.0",
+  "description": "案件线索管理平台后端服务",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "prisma db seed",
+    "db:setup": "prisma migrate dev --name init && prisma generate && prisma db seed"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "@fastify/static": "^7.0.4",
+    "@prisma/client": "^5.16.0",
+    "fastify": "^4.28.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/uuid": "^9.0.8",
+    "prisma": "^5.16.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5"
+  }
+}
