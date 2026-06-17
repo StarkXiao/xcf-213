@@ -531,13 +531,13 @@ export default function AdvancedSearch() {
 
   const dedupeEvidenceColumns: ColumnsType<any> = [
     {
-      title: '证据编号',
+      title: '证据特征',
       dataIndex: 'evidenceNumber',
-      width: 160,
+      width: 280,
       render: (text) => (
         <Space>
           <BarcodeOutlined style={{ color: '#722ed1' }} />
-          <span style={{ fontFamily: 'monospace', fontWeight: 500, color: '#722ed1' }}>{text}</span>
+          <span style={{ fontFamily: 'monospace', fontWeight: 500, color: '#722ed1', fontSize: 12 }}>{text}</span>
         </Space>
       ),
     },
@@ -891,25 +891,34 @@ export default function AdvancedSearch() {
                 <List
                   grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4 }}
                   dataSource={record.cases}
-                  renderItem={(item: any) => (
-                    <List.Item>
-                      <Card
-                        size="small"
-                        hoverable
-                        onClick={() => navigate(`/cases/${item.id}`)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <Card.Meta
-                          title={<span style={{ fontFamily: 'monospace' }}>{item.caseNumber}</span>}
-                          description={item.title}
-                        />
-                        <div style={{ marginTop: 8 }}>
-                          <Tag color="blue">{item.caseType}</Tag>
-                          <Tag color={getCaseStatusColor(item.status)}>{item.status}</Tag>
-                        </div>
-                      </Card>
-                    </List.Item>
-                  )}
+                  renderItem={(item: any) => {
+                    const sourceLabel = item.source === 'clue' ? '线索带出' : item.source === 'evidence' ? '证据带出' : '案件地点';
+                    const sourceColor = item.source === 'clue' ? 'orange' : item.source === 'evidence' ? 'purple' : 'blue';
+                    return (
+                      <List.Item key={item.id}>
+                        <Card
+                          size="small"
+                          hoverable
+                          onClick={() => navigate(`/cases/${item.id}`)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <div style={{ marginBottom: 4 }}>
+                            <Tag color={sourceColor} style={{ fontSize: 11 }}>
+                              {sourceLabel}
+                            </Tag>
+                          </div>
+                          <Card.Meta
+                            title={<span style={{ fontFamily: 'monospace' }}>{item.caseNumber}</span>}
+                            description={item.title}
+                          />
+                          <div style={{ marginTop: 8 }}>
+                            <Tag color="blue">{item.caseType}</Tag>
+                            <Tag color={getCaseStatusColor(item.status)}>{item.status}</Tag>
+                          </div>
+                        </Card>
+                      </List.Item>
+                    );
+                  }}
                 />
               </div>
             ),
@@ -922,7 +931,7 @@ export default function AdvancedSearch() {
       label: (
         <Space>
           <BarcodeOutlined style={{ color: '#722ed1' }} />
-          证据编号碰撞
+          证据特征碰撞
           <Tag color="purple">{dedupeResults.evidenceNumbers?.length || 0}</Tag>
         </Space>
       ),
@@ -941,13 +950,18 @@ export default function AdvancedSearch() {
                   grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4 }}
                   dataSource={record.evidences}
                   renderItem={(item: any) => (
-                    <List.Item>
+                    <List.Item key={item.id}>
                       <Card
                         size="small"
                         hoverable
                         onClick={() => navigate(`/evidences/${item.id}`)}
                         style={{ cursor: 'pointer' }}
                       >
+                        <div style={{ marginBottom: 4 }}>
+                          <Text style={{ fontFamily: 'monospace', fontSize: 11, color: '#722ed1' }}>
+                            {item.evidenceNumber}
+                          </Text>
+                        </div>
                         <Card.Meta
                           title={item.name}
                           description={
@@ -1175,7 +1189,7 @@ export default function AdvancedSearch() {
                       { label: '人员碰撞', value: 'persons' },
                       { label: '手机号碰撞', value: 'phones' },
                       { label: '地点碰撞', value: 'locations' },
-                      { label: '证据编号碰撞', value: 'evidenceNumbers' },
+                      { label: '证据特征碰撞', value: 'evidenceNumbers' },
                     ]}
                   />
                 </Form.Item>

@@ -495,6 +495,7 @@ export default async function (fastify: FastifyInstance) {
       });
 
       const locationMap = new Map<string, any>();
+      const allCaseIdsFromCluesAndEvidences = new Set<string>();
 
       const normalizeLocation = (loc: string): string => {
         return loc.trim().toLowerCase();
@@ -507,6 +508,7 @@ export default async function (fastify: FastifyInstance) {
             location: c.location,
             cases: [],
             caseIds: new Set(),
+            caseIdToSource: new Map(),
             clues: [],
             evidences: [],
           });
@@ -514,6 +516,7 @@ export default async function (fastify: FastifyInstance) {
         const entry = locationMap.get(key);
         if (!entry.caseIds.has(c.id)) {
           entry.caseIds.add(c.id);
+          entry.caseIdToSource.set(c.id, 'case');
           entry.cases.push({
             id: c.id,
             caseNumber: c.caseNumber,
@@ -532,6 +535,7 @@ export default async function (fastify: FastifyInstance) {
             location: clue.location,
             cases: [],
             caseIds: new Set(),
+            caseIdToSource: new Map(),
             clues: [],
             evidences: [],
           });
@@ -543,6 +547,8 @@ export default async function (fastify: FastifyInstance) {
         });
         if (clue.caseId && !entry.caseIds.has(clue.caseId)) {
           entry.caseIds.add(clue.caseId);
+          entry.caseIdToSource.set(clue.caseId, 'clue');
+          allCaseIdsFromCluesAndEvidences.add(clue.caseId);
         }
       });
 
@@ -553,6 +559,7 @@ export default async function (fastify: FastifyInstance) {
             location: evidence.location,
             cases: [],
             caseIds: new Set(),
+            caseIdToSource: new Map(),
             clues: [],
             evidences: [],
           });
@@ -564,8 +571,39 @@ export default async function (fastify: FastifyInstance) {
         });
         if (evidence.caseId && !entry.caseIds.has(evidence.caseId)) {
           entry.caseIds.add(evidence.caseId);
+          entry.caseIdToSource.set(evidence.caseId, 'evidence');
+          allCaseIdsFromCluesAndEvidences.add(evidence.caseId);
         }
       });
+
+      if (allCaseIdsFromCluesAndEvidences.size > 0) {
+        const missingCases = await prisma.case.findMany({
+          where: {
+            id: { in: Array.from(allCaseIdsFromCluesAndEvidences) },
+          },
+          select: {
+            id: true,
+            caseNumber: true,
+            title: true,
+            caseType: true,
+            status: true,
+          },
+        });
+
+        const missingCaseMap = new Map(missingCases.map(c => [c.id, c]));
+
+        locationMap.forEach(entry => {
+          entry.caseIdToSource.forEach((source: string, caseId: string) => {
+            if (source !== 'case' && missingCaseMap.has(caseId)) {
+              const caseDetail = missingCaseMap.get(caseId)!;
+              entry.cases.push({
+                ...caseDetail,
+                source,
+              });
+            }
+          });
+        });
+      }
 
       result.locations = Array.from(locationMap.values())
         .filter(item => item.caseIds.size >= minCount)
@@ -603,10 +641,11 @@ export default async function (fastify: FastifyInstance) {
 
       const evidenceNumMap = new Map<string, any>();
       evidences.forEach(e => {
-        const key = e.evidenceNumber;
+        const key = e.hash || `${e.name}-${e.type}`;
         if (!evidenceNumMap.has(key)) {
           evidenceNumMap.set(key, {
-            evidenceNumber: key,
+            evidenceNumber: e.evidenceNumber,
+            displayKey: e.hash ? `[HASH] ${e.hash.substring(0, 16)}...` : `[名称] ${e.name}`,
             evidences: [],
             cases: [],
             caseIds: new Set(),
@@ -615,9 +654,11 @@ export default async function (fastify: FastifyInstance) {
         const entry = evidenceNumMap.get(key);
         entry.evidences.push({
           id: e.id,
+          evidenceNumber: e.evidenceNumber,
           name: e.name,
           type: e.type,
           status: e.status,
+          hash: e.hash,
           clue: e.clue,
         });
         if (e.case && !entry.caseIds.has(e.case.id)) {
@@ -629,7 +670,7 @@ export default async function (fastify: FastifyInstance) {
       result.evidenceNumbers = Array.from(evidenceNumMap.values())
         .filter(item => item.caseIds.size >= minCount)
         .map(item => ({
-          evidenceNumber: item.evidenceNumber,
+          evidenceNumber: item.displayKey,
           evidenceCount: item.evidences.length,
           evidences: item.evidences,
           caseCount: item.caseIds.size,
