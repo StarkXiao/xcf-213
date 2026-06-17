@@ -285,6 +285,7 @@ export default async function (fastify: FastifyInstance) {
       evidenceType: e.type,
       fileType: getFileType(e.mimeType, e.fileName),
       fileUrl: e.filePath,
+      collectionTime: e.collectTime,
     }));
 
     const fileTypes = toArray(fileType);
@@ -362,6 +363,7 @@ export default async function (fastify: FastifyInstance) {
       evidenceTypes: ['物证', '书证', '证人证言', '被害人陈述', '犯罪嫌疑人供述', '鉴定意见', '勘验笔录', '视听资料', '电子数据', '其他'],
       fileTypes: ['image', 'video', 'audio', 'document', 'archive', 'other'],
       evidenceStatuses: ['待鉴定', '已鉴定', '已入库', '已移送', '已返还', '已销毁'],
+      collectionMethods: ['现场勘查提取', '搜查扣押', '调取证据', '证人提供', '犯罪嫌疑人提交', '技术侦查获取', '其他'],
       departments: ['刑侦大队', '重案中队', '技术中队', '情报中队', '派出所', '其他'],
     };
   });

@@ -264,6 +264,12 @@ export default function AdvancedSearch() {
       width: 80,
     },
     {
+      title: '收集方式',
+      dataIndex: 'collectionMethod',
+      width: 100,
+      render: (text) => text || '-',
+    },
+    {
       title: '收集人',
       dataIndex: 'collector',
       width: 80,

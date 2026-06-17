@@ -228,7 +228,11 @@ export default function EvidenceUpload() {
               <Row gutter={16}>
                 <Col xs={24} md={12}>
                   <Form.Item name="collectionMethod" label="收集方式">
-                    <Input placeholder="如：现场勘查、调取监控等" maxLength={100} />
+                    <Select
+                      placeholder="请选择收集方式"
+                      allowClear
+                      options={options.collectionMethods?.map((t: string) => ({ label: t, value: t }))}
+                    />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>

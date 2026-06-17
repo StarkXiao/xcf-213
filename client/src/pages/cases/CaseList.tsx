@@ -225,7 +225,7 @@ export default function CaseList() {
             </Col>
             <Col xs={24} sm={12} md={4}>
               <Form.Item name="priority" label="优先级">
-                <Select placeholder="选择优先级" allowClear options={options.casePriorities?.map((t: string) => ({ label: t, value: t }))} />
+                <Select placeholder="选择优先级" allowClear options={options.priorities?.map((t: string) => ({ label: t, value: t }))} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={6}>

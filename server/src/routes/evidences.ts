@@ -28,8 +28,10 @@ interface EvidenceCreate {
   fileSize?: number;
   mimeType?: string;
   hash?: string;
+  collectionMethod?: string;
   collector?: string;
   collectTime?: string;
+  collectionTime?: string;
   location?: string;
   status: string;
   note?: string;
@@ -56,6 +58,7 @@ export default async function (fastify: FastifyInstance) {
     fileType: getFileType(evidence.mimeType, evidence.fileName),
     fileUrl: evidence.filePath,
     originalName: evidence.fileName,
+    collectionTime: evidence.collectTime,
   });
 
   fastify.get('/', async (request: FastifyRequest<{ Querystring: EvidenceQuery }>, reply) => {
@@ -142,11 +145,12 @@ export default async function (fastify: FastifyInstance) {
       data: {
         ...data,
         evidenceNumber,
-        collectTime: data.collectTime ? new Date(data.collectTime) : null,
+        collectionMethod: data.collectionMethod,
+        collectTime: data.collectionTime ? new Date(data.collectionTime) : data.collectTime ? new Date(data.collectTime) : null,
       },
     });
 
-    return evidence;
+    return transformEvidence(evidence);
   });
 
   fastify.post('/upload', async (request, reply) => {
@@ -195,6 +199,7 @@ export default async function (fastify: FastifyInstance) {
         mimeType: result.mimeType,
         caseId: result.caseId,
         clueId: result.clueId,
+        collectionMethod: result.collectionMethod,
         collector: result.collector,
         collectTime: result.collectionTime ? new Date(result.collectionTime) : result.collectTime ? new Date(result.collectTime) : null,
         location: result.location,
@@ -213,10 +218,10 @@ export default async function (fastify: FastifyInstance) {
         where: { id: request.params.id },
         data: {
           ...data,
-          collectTime: data.collectTime ? new Date(data.collectTime) : undefined,
+          collectTime: data.collectionTime ? new Date(data.collectionTime) : data.collectTime ? new Date(data.collectTime) : undefined,
         },
       });
-      return evidence;
+      return transformEvidence(evidence);
     } catch (error) {
       reply.status(404).send({ error: '证据不存在' });
     }

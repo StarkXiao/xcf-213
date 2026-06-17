@@ -228,6 +228,13 @@ export default function EvidenceList() {
       ) : '-',
     },
     {
+      title: '收集方式',
+      dataIndex: 'collectionMethod',
+      key: 'collectionMethod',
+      width: 100,
+      render: (text) => text || '-',
+    },
+    {
       title: '收集人',
       dataIndex: 'collector',
       key: 'collector',

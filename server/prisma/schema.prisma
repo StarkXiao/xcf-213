@@ -139,6 +139,7 @@ model Evidence {
   fileSize    Int?
   mimeType    String?
   hash        String?
+  collectionMethod String?
   collector   String?
   collectTime DateTime?
   location    String?

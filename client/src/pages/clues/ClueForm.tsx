@@ -147,9 +147,12 @@ export default function ClueForm() {
               <Form.Item
                 name="source"
                 label="线索来源"
-                rules={[{ required: true, message: '请输入线索来源' }]}
+                rules={[{ required: true, message: '请选择线索来源' }]}
               >
-                <Input placeholder="请输入线索来源" maxLength={100} />
+                <Select
+                  placeholder="请选择线索来源"
+                  options={options.clueSources?.map((t: string) => ({ label: t, value: t }))}
+                />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
@@ -173,7 +176,7 @@ export default function ClueForm() {
               >
                 <Select
                   placeholder="请选择可信度"
-                  options={options.credibilityLevels?.map((t: string) => ({ label: t, value: t }))}
+                  options={options.credibilities?.map((t: string) => ({ label: t, value: t }))}
                 />
               </Form.Item>
             </Col>
@@ -185,7 +188,7 @@ export default function ClueForm() {
               >
                 <Select
                   placeholder="请选择重要性"
-                  options={options.importanceLevels?.map((t: string) => ({ label: t, value: t }))}
+                  options={options.importances?.map((t: string) => ({ label: t, value: t }))}
                 />
               </Form.Item>
             </Col>

@@ -240,12 +240,12 @@ export default function ClueList() {
             </Col>
             <Col xs={24} sm={12} md={4}>
               <Form.Item name="credibility" label="可信度">
-                <Select placeholder="选择可信度" allowClear options={options.credibilityLevels?.map((t: string) => ({ label: t, value: t }))} />
+                <Select placeholder="选择可信度" allowClear options={options.credibilities?.map((t: string) => ({ label: t, value: t }))} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={4}>
               <Form.Item name="importance" label="重要性">
-                <Select placeholder="选择重要性" allowClear options={options.importanceLevels?.map((t: string) => ({ label: t, value: t }))} />
+                <Select placeholder="选择重要性" allowClear options={options.importances?.map((t: string) => ({ label: t, value: t }))} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={24} md={2}>

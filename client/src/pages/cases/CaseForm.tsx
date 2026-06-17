@@ -132,7 +132,7 @@ export default function CaseForm() {
               >
                 <Select
                   placeholder="请选择优先级"
-                  options={options.casePriorities?.map((t: string) => ({ label: t, value: t }))}
+                  options={options.priorities?.map((t: string) => ({ label: t, value: t }))}
                 />
               </Form.Item>
             </Col>
