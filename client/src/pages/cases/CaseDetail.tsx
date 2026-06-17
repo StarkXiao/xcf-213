@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { caseApi, personApi, clueApi, evidenceApi } from '../../services/api';
@@ -54,6 +54,25 @@ const evidenceTypeColors: Record<string, string> = {
   '鉴定意见': 'cyan',
   '勘验笔录': 'magenta',
   '其他': 'default',
+};
+
+const investigationStages = [
+  { key: 'report', title: '接报案阶段', description: '接到报案，初步了解案件情况', icon: FileSearchOutlined },
+  { key: 'filing', title: '立案审查阶段', description: '审查案件是否符合立案条件', icon: FileTextOutlined },
+  { key: 'investigation', title: '侦查取证阶段', description: '深入侦查，收集线索和证据', icon: SearchOutlined },
+  { key: 'breakthrough', title: '破案攻坚阶段', description: '锁定嫌疑人，完善证据链', icon: CheckCircleOutlined },
+  { key: 'prosecution', title: '移送起诉阶段', description: '移交检察机关审查起诉', icon: PaperClipOutlined },
+  { key: 'trial', title: '审理判决阶段', description: '法院审理并作出判决', icon: WarningOutlined },
+  { key: 'closed', title: '结案归档阶段', description: '案件办结，整理归档', icon: FileTextOutlined },
+];
+
+const stageStatusMap: Record<string, number> = {
+  '待立案': 1,
+  '侦查中': 3,
+  '已移送起诉': 4,
+  '已判决': 6,
+  '已结案': 7,
+  '已撤销': 0,
 };
 
 export default function CaseDetail() {
@@ -196,6 +215,36 @@ export default function CaseDetail() {
   };
 
   if (!caseData) return null;
+
+  const currentStageIndex = stageStatusMap[caseData.status] ?? 0;
+
+  const clueStats = {
+    total: caseData.clues?.length || 0,
+    verified: caseData.clues?.filter((c: any) => c.status === '已核实' || c.status === '已采用').length || 0,
+    verifying: caseData.clues?.filter((c: any) => c.status === '核实中').length || 0,
+    unused: caseData.clues?.filter((c: any) => c.status === '待核实' || c.status === '未采用').length || 0,
+  };
+
+  const evidenceStats = {
+    total: caseData.evidences?.length || 0,
+    collected: caseData.evidences?.filter((e: any) => e.status === '已入库' || e.status === '已鉴定').length || 0,
+    authenticating: caseData.evidences?.filter((e: any) => e.status === '鉴定中' || e.status === '待鉴定').length || 0,
+    pending: caseData.evidences?.filter((e: any) => e.status === '待入库').length || 0,
+  };
+
+  const personStats = {
+    total: caseData.casePersons?.length || 0,
+    suspects: caseData.casePersons?.filter((cp: any) => cp.person?.personType === '嫌疑人').length || 0,
+    victims: caseData.casePersons?.filter((cp: any) => cp.person?.personType === '受害人').length || 0,
+    witnesses: caseData.casePersons?.filter((cp: any) => cp.person?.personType === '证人').length || 0,
+    related: caseData.casePersons?.filter((cp: any) => cp.person?.personType === '关系人').length || 0,
+  };
+
+  const stageProgress = {
+    clueProgress: clueStats.total > 0 ? Math.round((clueStats.verified / clueStats.total) * 100) : 0,
+    evidenceProgress: evidenceStats.total > 0 ? Math.round((evidenceStats.collected / evidenceStats.total) * 100) : 0,
+    personProgress: personStats.total > 0 ? Math.round(((personStats.suspects + personStats.victims + personStats.witnesses) / personStats.total) * 100) : 0,
+  };
 
   const tabItems = [
     {
@@ -384,6 +433,267 @@ export default function CaseDetail() {
               </List.Item>
             )}
           />
+        </div>
+      ),
+    },
+    {
+      key: 'stages',
+      label: '阶段推进',
+      icon: <ClockCircleOutlined />,
+      children: (
+        <div>
+          <Card
+            title="案件侦查阶段推进"
+            extra={<Tag color={statusColors[caseData.status]}>当前状态: {caseData.status}</Tag>}
+            style={{ marginBottom: 24 }}
+          >
+            <Steps
+              direction="vertical"
+              current={currentStageIndex}
+              status={caseData.status === '已撤销' ? 'error' : 'process'}
+              items={investigationStages.map((stage, index) => ({
+                title: stage.title,
+                description: (
+                  <div>
+                    <p style={{ color: '#666', marginBottom: 8 }}>{stage.description}</p>
+                    {index < currentStageIndex && (
+                      <Tag color="success">已完成</Tag>
+                    )}
+                    {index === currentStageIndex && (
+                      <Tag color="processing">进行中</Tag>
+                    )}
+                    {index > currentStageIndex && (
+                      <Tag>待开始</Tag>
+                    )}
+                  </div>
+                ),
+                icon: React.createElement(stage.icon),
+              }))}
+            />
+          </Card>
+
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Card>
+                <Statistic
+                  title="线索核查进度"
+                  value={stageProgress.clueProgress}
+                  suffix="%"
+                  prefix={<SearchOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+                <Progress
+                  percent={stageProgress.clueProgress}
+                  status="active"
+                  style={{ marginTop: 16 }}
+                />
+                <Divider />
+                <div style={{ fontSize: 12, color: '#666' }}>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>已核实/采用:</span>
+                    <Tag color="success">{clueStats.verified} 条</Tag>
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>核实中:</span>
+                    <Tag color="processing">{clueStats.verifying} 条</Tag>
+                  </div>
+                  <div>
+                    <span style={{ display: 'inline-block', width: 80 }}>待核实/未用:</span>
+                    <Tag>{clueStats.unused} 条</Tag>
+                  </div>
+                </div>
+              </Card>
+            </Col>
+            <Col xs={24} md={8}>
+              <Card>
+                <Statistic
+                  title="证据收集进度"
+                  value={stageProgress.evidenceProgress}
+                  suffix="%"
+                  prefix={<PaperClipOutlined />}
+                  valueStyle={{ color: '#52c41a' }}
+                />
+                <Progress
+                  percent={stageProgress.evidenceProgress}
+                  status="active"
+                  strokeColor="#52c41a"
+                  style={{ marginTop: 16 }}
+                />
+                <Divider />
+                <div style={{ fontSize: 12, color: '#666' }}>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>已入库/鉴定:</span>
+                    <Tag color="success">{evidenceStats.collected} 份</Tag>
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>鉴定中:</span>
+                    <Tag color="processing">{evidenceStats.authenticating} 份</Tag>
+                  </div>
+                  <div>
+                    <span style={{ display: 'inline-block', width: 80 }}>待入库:</span>
+                    <Tag>{evidenceStats.pending} 份</Tag>
+                  </div>
+                </div>
+              </Card>
+            </Col>
+            <Col xs={24} md={8}>
+              <Card>
+                <Statistic
+                  title="人员核查覆盖"
+                  value={stageProgress.personProgress}
+                  suffix="%"
+                  prefix={<TeamOutlined />}
+                  valueStyle={{ color: '#faad14' }}
+                />
+                <Progress
+                  percent={stageProgress.personProgress}
+                  status="active"
+                  strokeColor="#faad14"
+                  style={{ marginTop: 16 }}
+                />
+                <Divider />
+                <div style={{ fontSize: 12, color: '#666' }}>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>嫌疑人:</span>
+                    <Tag color="red">{personStats.suspects} 人</Tag>
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>受害人:</span>
+                    <Tag color="orange">{personStats.victims} 人</Tag>
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    <span style={{ display: 'inline-block', width: 80 }}>证人:</span>
+                    <Tag color="green">{personStats.witnesses} 人</Tag>
+                  </div>
+                  <div>
+                    <span style={{ display: 'inline-block', width: 80 }}>关系人:</span>
+                    <Tag color="blue">{personStats.related} 人</Tag>
+                  </div>
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
+          <Card title="阶段时间线" style={{ marginTop: 24 }}>
+            <Timeline
+              mode="left"
+              items={[
+                {
+                  color: 'green',
+                  label: caseData.reportTime ? moment(caseData.reportTime).format('YYYY-MM-DD HH:mm') : '-',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>接报案</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        接到报案，案件进入侦查流程
+                      </p>
+                      {caseData.reportTime && (
+                        <Tag color="success">已完成</Tag>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  color: currentStageIndex >= 1 ? 'green' : 'gray',
+                  label: caseData.createdAt ? moment(caseData.createdAt).format('YYYY-MM-DD HH:mm') : '-',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>立案登记</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        案件信息录入系统，分配主办民警
+                      </p>
+                      <Tag color="success">已完成</Tag>
+                    </div>
+                  ),
+                },
+                {
+                  color: currentStageIndex >= 3 ? 'green' : 'blue',
+                  label: currentStageIndex >= 3 ? moment(caseData.updatedAt).format('YYYY-MM-DD HH:mm') : '进行中',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>侦查取证</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        收集线索 {clueStats.total} 条，固定证据 {evidenceStats.total} 份，核查人员 {personStats.total} 人
+                      </p>
+                      {currentStageIndex >= 3 ? (
+                        <Tag color="success">已完成</Tag>
+                      ) : (
+                        <Tag color="processing">进行中</Tag>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  color: currentStageIndex >= 4 ? 'green' : 'gray',
+                  label: currentStageIndex >= 4 ? '-' : '待开始',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>破案攻坚</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        锁定主要嫌疑人，完善证据链
+                      </p>
+                      {currentStageIndex >= 4 ? (
+                        <Tag color="success">已完成</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  color: currentStageIndex >= 5 ? 'green' : 'gray',
+                  label: currentStageIndex >= 5 ? '-' : '待开始',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>移送起诉</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        移交检察机关审查起诉
+                      </p>
+                      {currentStageIndex >= 5 ? (
+                        <Tag color="success">已完成</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  color: currentStageIndex >= 7 ? 'green' : 'gray',
+                  label: currentStageIndex >= 7 ? '-' : '待开始',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>审理判决</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        法院审理并作出判决
+                      </p>
+                      {currentStageIndex >= 7 ? (
+                        <Tag color="success">已完成</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  color: currentStageIndex >= 8 ? 'green' : 'gray',
+                  label: caseData.status === '已结案' ? moment(caseData.updatedAt).format('YYYY-MM-DD HH:mm') : '待开始',
+                  children: (
+                    <div>
+                      <p style={{ fontWeight: 'bold', marginBottom: 4 }}>结案归档</p>
+                      <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+                        案件办结，案卷整理归档
+                      </p>
+                      {caseData.status === '已结案' ? (
+                        <Tag color="success">已完成</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </Card>
         </div>
       ),
     },
