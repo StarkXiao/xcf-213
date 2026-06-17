@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Space, Tabs, Table, Tag, message, Row, Col, DatePicker, Collapse, Empty, Typography } from 'antd';
-import { SearchOutlined, ReloadOutlined, FileTextOutlined, BulbOutlined, TeamOutlined, PaperClipOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Space, Tabs, Table, Tag, message, Row, Col, DatePicker, Collapse, Empty, Typography, Radio, Divider, List, Avatar, Tooltip } from 'antd';
+import { SearchOutlined, ReloadOutlined, FileTextOutlined, BulbOutlined, TeamOutlined, PaperClipOutlined, EnvironmentOutlined, PhoneOutlined, BarcodeOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import type { ColumnsType } from 'antd/es/table';
 import { searchApi } from '../../services/api';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
 const { Panel } = Collapse;
 
 export default function AdvancedSearch() {
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  const [dedupeForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [dedupeLoading, setDedupeLoading] = useState(false);
   const [options, setOptions] = useState<any>({});
   const [results, setResults] = useState<any>({ cases: [], clues: [], persons: [], evidences: [] });
   const [hasSearched, setHasSearched] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [searchMode, setSearchMode] = useState<'advanced' | 'dedupe'>('advanced');
+  const [dedupeResults, setDedupeResults] = useState<any>({ persons: [], phones: [], locations: [], evidenceNumbers: [] });
+  const [hasDeduped, setHasDeduped] = useState(false);
+  const [dedupeActiveTab, setDedupeActiveTab] = useState('persons');
 
   useEffect(() => {
     loadOptions();
@@ -61,6 +67,61 @@ export default function AdvancedSearch() {
     form.resetFields();
     setResults({ cases: [], clues: [], persons: [], evidences: [] });
     setHasSearched(false);
+  };
+
+  const handleDedupeSearch = async (values: any) => {
+    setDedupeLoading(true);
+    setHasDeduped(true);
+    try {
+      const params: any = {};
+      if (values.dimensions && values.dimensions.length > 0) {
+        params.dimensions = values.dimensions;
+      }
+      if (values.minCaseCount) {
+        params.minCaseCount = values.minCaseCount;
+      }
+      const res = await searchApi.crossCaseDedupe(params);
+      setDedupeResults(res.data);
+
+      const dims = values.dimensions || ['persons', 'phones', 'locations', 'evidenceNumbers'];
+      if (dims.length > 0) {
+        setDedupeActiveTab(dims[0]);
+      }
+    } catch (error) {
+      message.error('跨案筛重失败');
+    } finally {
+      setDedupeLoading(false);
+    }
+  };
+
+  const handleDedupeReset = () => {
+    dedupeForm.resetFields();
+    setDedupeResults({ persons: [], phones: [], locations: [], evidenceNumbers: [] });
+    setHasDeduped(false);
+  };
+
+  const getPersonTypeColor = (type: string) => {
+    const colorMap: Record<string, string> = {
+      '嫌疑人': 'red',
+      '受害人': 'orange',
+      '证人': 'green',
+      '关系人': 'blue',
+      '其他': 'default',
+    };
+    return colorMap[type] || 'default';
+  };
+
+  const getCaseStatusColor = (status: string) => {
+    const colorMap: Record<string, string> = {
+      '已结案': 'green',
+      '侦查中': 'orange',
+      '已立案': 'blue',
+      '待立案': 'default',
+      '已移送起诉': 'purple',
+      '已判决': 'cyan',
+      '已撤销': 'red',
+    };
+    return colorMap[status] || 'default';
   };
 
   const caseColumns: ColumnsType<any> = [
@@ -298,6 +359,236 @@ export default function AdvancedSearch() {
     },
   ];
 
+  const dedupePersonColumns: ColumnsType<any> = [
+    {
+      title: '姓名',
+      dataIndex: 'name',
+      width: 120,
+      render: (text, record) => (
+        <Space>
+          <Avatar size="small" style={{ backgroundColor: '#52c41a' }}>
+            {text?.charAt(0)}
+          </Avatar>
+          <a onClick={() => navigate(`/persons/${record.id}`)}>{text}</a>
+        </Space>
+      ),
+    },
+    {
+      title: '人员类型',
+      dataIndex: 'personType',
+      width: 100,
+      render: (text) => <Tag color={getPersonTypeColor(text)}>{text}</Tag>,
+    },
+    {
+      title: '身份证号',
+      dataIndex: 'idCard',
+      width: 180,
+      render: (text) => text ? <span style={{ fontFamily: 'monospace' }}>{text}</span> : '-',
+    },
+    {
+      title: '联系电话',
+      dataIndex: 'phone',
+      width: 130,
+      render: (text) => text || '-',
+    },
+    {
+      title: '关联案件数',
+      dataIndex: 'caseCount',
+      width: 120,
+      render: (text) => (
+        <Tag color={text >= 3 ? 'red' : text >= 2 ? 'orange' : 'blue'}>
+          {text} 个案件
+        </Tag>
+      ),
+    },
+    {
+      title: '关联案件',
+      dataIndex: 'cases',
+      render: (cases) => (
+        <Space wrap size={[4, 4]}>
+          {cases?.map((c: any) => (
+            <Tooltip key={c.id} title={c.title}>
+              <Tag color="blue" style={{ cursor: 'pointer' }} onClick={() => navigate(`/cases/${c.id}`)}>
+                {c.caseNumber}
+              </Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+  ];
+
+  const dedupePhoneColumns: ColumnsType<any> = [
+    {
+      title: '手机号',
+      dataIndex: 'phone',
+      width: 150,
+      render: (text) => (
+        <Space>
+          <PhoneOutlined style={{ color: '#1890ff' }} />
+          <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>{text}</span>
+        </Space>
+      ),
+    },
+    {
+      title: '关联人数',
+      dataIndex: 'personCount',
+      width: 100,
+      render: (text) => <Tag color="green">{text} 人</Tag>,
+    },
+    {
+      title: '关联人员',
+      dataIndex: 'persons',
+      render: (persons) => (
+        <Space wrap size={[4, 4]}>
+          {persons?.map((p: any) => (
+            <Tooltip key={p.id} title={p.personType}>
+              <Tag color={getPersonTypeColor(p.personType)} style={{ cursor: 'pointer' }} onClick={() => navigate(`/persons/${p.id}`)}>
+                {p.name}
+              </Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: '关联案件数',
+      dataIndex: 'caseCount',
+      width: 120,
+      render: (text) => (
+        <Tag color={text >= 3 ? 'red' : text >= 2 ? 'orange' : 'blue'}>
+          {text} 个案件
+        </Tag>
+      ),
+    },
+    {
+      title: '关联案件',
+      dataIndex: 'cases',
+      render: (cases) => (
+        <Space wrap size={[4, 4]}>
+          {cases?.map((c: any) => (
+            <Tooltip key={c.id} title={c.title}>
+              <Tag color="blue" style={{ cursor: 'pointer' }} onClick={() => navigate(`/cases/${c.id}`)}>
+                {c.caseNumber}
+              </Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+  ];
+
+  const dedupeLocationColumns: ColumnsType<any> = [
+    {
+      title: '地点',
+      dataIndex: 'location',
+      width: 250,
+      render: (text) => (
+        <Space>
+          <EnvironmentOutlined style={{ color: '#fa8c16' }} />
+          <span>{text}</span>
+        </Space>
+      ),
+    },
+    {
+      title: '关联案件数',
+      dataIndex: 'caseCount',
+      width: 120,
+      render: (text) => (
+        <Tag color={text >= 3 ? 'red' : text >= 2 ? 'orange' : 'blue'}>
+          {text} 个案件
+        </Tag>
+      ),
+    },
+    {
+      title: '线索数量',
+      dataIndex: 'clueCount',
+      width: 100,
+      render: (text) => <Tag color="orange">{text} 条</Tag>,
+    },
+    {
+      title: '证据数量',
+      dataIndex: 'evidenceCount',
+      width: 100,
+      render: (text) => <Tag color="purple">{text} 份</Tag>,
+    },
+    {
+      title: '关联案件',
+      dataIndex: 'cases',
+      render: (cases) => (
+        <Space wrap size={[4, 4]}>
+          {cases?.map((c: any) => (
+            <Tooltip key={c.id} title={c.title}>
+              <Tag color="blue" style={{ cursor: 'pointer' }} onClick={() => navigate(`/cases/${c.id}`)}>
+                {c.caseNumber}
+              </Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+  ];
+
+  const dedupeEvidenceColumns: ColumnsType<any> = [
+    {
+      title: '证据编号',
+      dataIndex: 'evidenceNumber',
+      width: 160,
+      render: (text) => (
+        <Space>
+          <BarcodeOutlined style={{ color: '#722ed1' }} />
+          <span style={{ fontFamily: 'monospace', fontWeight: 500, color: '#722ed1' }}>{text}</span>
+        </Space>
+      ),
+    },
+    {
+      title: '证据条目数',
+      dataIndex: 'evidenceCount',
+      width: 120,
+      render: (text) => <Tag color="purple">{text} 条</Tag>,
+    },
+    {
+      title: '关联案件数',
+      dataIndex: 'caseCount',
+      width: 120,
+      render: (text) => (
+        <Tag color={text >= 3 ? 'red' : text >= 2 ? 'orange' : 'blue'}>
+          {text} 个案件
+        </Tag>
+      ),
+    },
+    {
+      title: '关联证据',
+      dataIndex: 'evidences',
+      render: (evidences) => (
+        <Space wrap size={[4, 4]}>
+          {evidences?.map((e: any) => (
+            <Tooltip key={e.id} title={e.name}>
+              <Tag color="purple" style={{ cursor: 'pointer' }} onClick={() => navigate(`/evidences/${e.id}`)}>
+                {e.name}
+              </Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: '关联案件',
+      dataIndex: 'cases',
+      render: (cases) => (
+        <Space wrap size={[4, 4]}>
+          {cases?.map((c: any) => (
+            <Tooltip key={c.id} title={c.title}>
+              <Tag color="blue" style={{ cursor: 'pointer' }} onClick={() => navigate(`/cases/${c.id}`)}>
+                {c.caseNumber}
+              </Tag>
+            </Tooltip>
+          ))}
+        </Space>
+      ),
+    },
+  ];
+
   const tabItems = [
     {
       key: 'all',
@@ -454,6 +745,260 @@ export default function AdvancedSearch() {
   const totalCount = (results.cases?.length || 0) + (results.clues?.length || 0) +
                      (results.persons?.length || 0) + (results.evidences?.length || 0);
 
+  const dedupeTotalCount = (dedupeResults.persons?.length || 0) +
+                          (dedupeResults.phones?.length || 0) +
+                          (dedupeResults.locations?.length || 0) +
+                          (dedupeResults.evidenceNumbers?.length || 0);
+
+  const dedupeTabItems = [
+    {
+      key: 'persons',
+      label: (
+        <Space>
+          <TeamOutlined style={{ color: '#52c41a' }} />
+          人员碰撞
+          <Tag color="green">{dedupeResults.persons?.length || 0}</Tag>
+        </Space>
+      ),
+      children: (
+        <Table
+          columns={dedupePersonColumns}
+          dataSource={dedupeResults.persons}
+          rowKey="id"
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: 1000 }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <div style={{ padding: '0 16px' }}>
+                <Title level={5} style={{ marginBottom: 8 }}>关联案件详情</Title>
+                <List
+                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4 }}
+                  dataSource={record.cases}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Card
+                        size="small"
+                        hoverable
+                        onClick={() => navigate(`/cases/${item.id}`)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Card.Meta
+                          title={<span style={{ fontFamily: 'monospace' }}>{item.caseNumber}</span>}
+                          description={item.title}
+                        />
+                        <div style={{ marginTop: 8 }}>
+                          <Tag color="blue">{item.caseType}</Tag>
+                          <Tag color={getCaseStatusColor(item.status)}>{item.status}</Tag>
+                        </div>
+                      </Card>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ),
+          }}
+        />
+      ),
+    },
+    {
+      key: 'phones',
+      label: (
+        <Space>
+          <PhoneOutlined style={{ color: '#1890ff' }} />
+          手机号碰撞
+          <Tag color="blue">{dedupeResults.phones?.length || 0}</Tag>
+        </Space>
+      ),
+      children: (
+        <Table
+          columns={dedupePhoneColumns}
+          dataSource={dedupeResults.phones}
+          rowKey="phone"
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: 1000 }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <div style={{ padding: '0 16px' }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Title level={5} style={{ marginBottom: 8 }}>关联人员</Title>
+                    <List
+                      size="small"
+                      dataSource={record.persons}
+                      renderItem={(item: any) => (
+                        <List.Item onClick={() => navigate(`/persons/${item.id}`)} style={{ cursor: 'pointer' }}>
+                          <List.Item.Meta
+                            avatar={<Avatar size="small" style={{ backgroundColor: '#52c41a' }}>{item.name?.charAt(0)}</Avatar>}
+                            title={item.name}
+                            description={
+                              <Space>
+                                <Tag color={getPersonTypeColor(item.personType)}>{item.personType}</Tag>
+                                {item.idCard && <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{item.idCard}</span>}
+                              </Space>
+                            }
+                          />
+                        </List.Item>
+                      )}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Title level={5} style={{ marginBottom: 8 }}>关联案件</Title>
+                    <List
+                      size="small"
+                      dataSource={record.cases}
+                      renderItem={(item: any) => (
+                        <List.Item onClick={() => navigate(`/cases/${item.id}`)} style={{ cursor: 'pointer' }}>
+                          <List.Item.Meta
+                            title={<span style={{ fontFamily: 'monospace' }}>{item.caseNumber}</span>}
+                            description={
+                              <Space>
+                                <Tag color="blue">{item.caseType}</Tag>
+                                <Tag color={getCaseStatusColor(item.status)}>{item.status}</Tag>
+                              </Space>
+                            }
+                          />
+                        </List.Item>
+                      )}
+                    />
+                  </Col>
+                </Row>
+              </div>
+            ),
+          }}
+        />
+      ),
+    },
+    {
+      key: 'locations',
+      label: (
+        <Space>
+          <EnvironmentOutlined style={{ color: '#fa8c16' }} />
+          地点碰撞
+          <Tag color="orange">{dedupeResults.locations?.length || 0}</Tag>
+        </Space>
+      ),
+      children: (
+        <Table
+          columns={dedupeLocationColumns}
+          dataSource={dedupeResults.locations}
+          rowKey="location"
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: 1000 }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <div style={{ padding: '0 16px' }}>
+                <Title level={5} style={{ marginBottom: 8 }}>关联案件详情</Title>
+                <List
+                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4 }}
+                  dataSource={record.cases}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Card
+                        size="small"
+                        hoverable
+                        onClick={() => navigate(`/cases/${item.id}`)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Card.Meta
+                          title={<span style={{ fontFamily: 'monospace' }}>{item.caseNumber}</span>}
+                          description={item.title}
+                        />
+                        <div style={{ marginTop: 8 }}>
+                          <Tag color="blue">{item.caseType}</Tag>
+                          <Tag color={getCaseStatusColor(item.status)}>{item.status}</Tag>
+                        </div>
+                      </Card>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ),
+          }}
+        />
+      ),
+    },
+    {
+      key: 'evidenceNumbers',
+      label: (
+        <Space>
+          <BarcodeOutlined style={{ color: '#722ed1' }} />
+          证据编号碰撞
+          <Tag color="purple">{dedupeResults.evidenceNumbers?.length || 0}</Tag>
+        </Space>
+      ),
+      children: (
+        <Table
+          columns={dedupeEvidenceColumns}
+          dataSource={dedupeResults.evidenceNumbers}
+          rowKey="evidenceNumber"
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: 1000 }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <div style={{ padding: '0 16px' }}>
+                <Title level={5} style={{ marginBottom: 8 }}>关联证据详情</Title>
+                <List
+                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4 }}
+                  dataSource={record.evidences}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Card
+                        size="small"
+                        hoverable
+                        onClick={() => navigate(`/evidences/${item.id}`)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Card.Meta
+                          title={item.name}
+                          description={
+                            <Space>
+                              <Tag color="purple">{item.type}</Tag>
+                              <Tag color="default">{item.status}</Tag>
+                            </Space>
+                          }
+                        />
+                        {item.clue && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                            关联线索：{item.clue.clueNumber}
+                          </div>
+                        )}
+                      </Card>
+                    </List.Item>
+                  )}
+                />
+                <Divider style={{ margin: '16px 0' }} />
+                <Title level={5} style={{ marginBottom: 8 }}>关联案件</Title>
+                <List
+                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4 }}
+                  dataSource={record.cases}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Card
+                        size="small"
+                        hoverable
+                        onClick={() => navigate(`/cases/${item.id}`)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Card.Meta
+                          title={<span style={{ fontFamily: 'monospace' }}>{item.caseNumber}</span>}
+                          description={item.title}
+                        />
+                        <div style={{ marginTop: 8 }}>
+                          <Tag color="blue">{item.caseType}</Tag>
+                          <Tag color={getCaseStatusColor(item.status)}>{item.status}</Tag>
+                        </div>
+                      </Card>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ),
+          }}
+        />
+      ),
+    },
+  ];
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -461,7 +1006,28 @@ export default function AdvancedSearch() {
       </div>
 
       <Card className="card-shadow" style={{ marginBottom: 16 }}>
-        <Form form={form} layout="vertical" onFinish={handleSearch}>
+        <Radio.Group
+          value={searchMode}
+          onChange={(e) => setSearchMode(e.target.value)}
+          size="large"
+          style={{ marginBottom: 16 }}
+        >
+          <Radio.Button value="advanced">
+            <Space>
+              <SearchOutlined />
+              高级搜索
+            </Space>
+          </Radio.Button>
+          <Radio.Button value="dedupe">
+            <Space>
+              <WarningOutlined />
+              跨案筛重
+            </Space>
+          </Radio.Button>
+        </Radio.Group>
+
+        {searchMode === 'advanced' && (
+          <Form form={form} layout="vertical" onFinish={handleSearch}>
           <Collapse defaultActiveKey={['1', '2', '3', '4']}>
             <Panel header="通用查询条件" key="1">
               <Row gutter={16}>
@@ -590,31 +1156,127 @@ export default function AdvancedSearch() {
               </Button>
             </Space>
           </Form.Item>
-        </Form>
+          </Form>
+        )}
+
+        {searchMode === 'dedupe' && (
+          <Form form={dedupeForm} layout="vertical" onFinish={handleDedupeSearch} initialValues={{
+            dimensions: ['persons', 'phones', 'locations', 'evidenceNumbers'],
+            minCaseCount: 2,
+          }}>
+            <Row gutter={16}>
+              <Col xs={24} sm={16}>
+                <Form.Item name="dimensions" label="碰撞维度" rules={[{ required: true, message: '请选择至少一个碰撞维度' }]}>
+                  <Select
+                    mode="multiple"
+                    placeholder="选择碰撞维度，可多选"
+                    style={{ width: '100%' }}
+                    options={[
+                      { label: '人员碰撞', value: 'persons' },
+                      { label: '手机号碰撞', value: 'phones' },
+                      { label: '地点碰撞', value: 'locations' },
+                      { label: '证据编号碰撞', value: 'evidenceNumbers' },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item name="minCaseCount" label="最少关联案件数">
+                  <Select
+                    placeholder="选择最少案件数"
+                    style={{ width: '100%' }}
+                    options={[
+                      { label: '2个及以上', value: 2 },
+                      { label: '3个及以上', value: 3 },
+                      { label: '5个及以上', value: 5 },
+                      { label: '10个及以上', value: 10 },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+            <div style={{ padding: '12px 16px', background: '#fff7e6', borderRadius: 8, marginBottom: 16 }}>
+              <Space>
+                <WarningOutlined style={{ color: '#fa8c16' }} />
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  跨案筛重功能可从多个维度（人员、手机号、地点、证据编号）查找跨案件的重复信息，帮助发现案件之间的潜在关联。
+                </Text>
+              </Space>
+            </div>
+            <Form.Item style={{ marginTop: 16, marginBottom: 0 }}>
+              <Space>
+                <Button type="primary" icon={<SearchOutlined />} htmlType="submit" loading={dedupeLoading}>
+                  开始碰撞分析
+                </Button>
+                <Button onClick={handleDedupeReset} icon={<ReloadOutlined />}>
+                  重置条件
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        )}
       </Card>
 
-      {hasSearched ? (
-        totalCount > 0 ? (
-          <Card className="card-shadow">
-            <div style={{ marginBottom: 16 }}>
-              <Title level={5} style={{ margin: 0 }}>
-                搜索结果 <Text type="secondary" style={{ fontSize: 14, fontWeight: 'normal' }}>（共 {totalCount} 条）</Text>
-              </Title>
-            </div>
-            <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
-          </Card>
-        ) : (
-          <Card className="card-shadow">
-            <Empty description="未找到匹配的结果，请调整搜索条件" />
-          </Card>
-        )
-      ) : (
-        <Card className="card-shadow">
-          <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
-            <SearchOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-            <p>请设置搜索条件并点击"开始搜索"</p>
-          </div>
-        </Card>
+      {searchMode === 'advanced' && (
+        <>
+          {hasSearched ? (
+            totalCount > 0 ? (
+              <Card className="card-shadow">
+                <div style={{ marginBottom: 16 }}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    搜索结果 <Text type="secondary" style={{ fontSize: 14, fontWeight: 'normal' }}>（共 {totalCount} 条）</Text>
+                  </Title>
+                </div>
+                <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
+              </Card>
+            ) : (
+              <Card className="card-shadow">
+                <Empty description="未找到匹配的结果，请调整搜索条件" />
+              </Card>
+            )
+          ) : (
+            <Card className="card-shadow">
+              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
+                <SearchOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                <p>请设置搜索条件并点击"开始搜索"</p>
+              </div>
+            </Card>
+          )}
+        </>
+      )}
+
+      {searchMode === 'dedupe' && (
+        <>
+          {hasDeduped ? (
+            dedupeTotalCount > 0 ? (
+              <Card className="card-shadow">
+                <div style={{ marginBottom: 16 }}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    碰撞分析结果 <Text type="secondary" style={{ fontSize: 14, fontWeight: 'normal' }}>（共发现 {dedupeTotalCount} 条碰撞记录）</Text>
+                  </Title>
+                </div>
+                <Tabs items={dedupeTabItems} activeKey={dedupeActiveTab} onChange={setDedupeActiveTab} />
+              </Card>
+            ) : (
+              <Card className="card-shadow">
+                <Empty
+                  description="未发现跨案重复信息，所有维度均未检测到满足条件的碰撞记录"
+                />
+              </Card>
+            )
+          ) : (
+            <Card className="card-shadow">
+              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
+                <WarningOutlined style={{ fontSize: 48, marginBottom: 16, color: '#fa8c16' }} />
+                <p>请选择碰撞维度并点击"开始碰撞分析"</p>
+                <Paragraph type="secondary" style={{ fontSize: 12, maxWidth: 400, margin: '0 auto' }}>
+                  跨案筛重可帮助发现多起案件之间的关联线索，
+                  包括共同涉案人员、相同联系方式、重复案发地点等。
+                </Paragraph>
+              </div>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );

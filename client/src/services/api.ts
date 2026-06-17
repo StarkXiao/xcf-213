@@ -84,6 +84,7 @@ export const searchApi = {
   advancedSearch: (params?: any) => api.get('/search/advanced', { params }),
   stats: () => api.get('/search/stats'),
   options: () => api.get('/search/options'),
+  crossCaseDedupe: (params?: any) => api.get('/search/cross-case-dedupe', { params }),
 };
 
 export default api;

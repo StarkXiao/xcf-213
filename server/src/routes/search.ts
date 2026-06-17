@@ -29,6 +29,11 @@ interface AdvancedSearchQuery {
   occurEndDate?: string;
 }
 
+interface CrossCaseDedupeQuery {
+  dimensions?: string | string[];
+  minCaseCount?: number;
+}
+
 export default async function (fastify: FastifyInstance) {
   fastify.get('/', async (request: FastifyRequest<{ Querystring: SearchQuery }>, reply) => {
     const { keyword, type, limit = 20 } = request.query;
@@ -343,6 +348,297 @@ export default async function (fastify: FastifyInstance) {
       recentCases,
       recentClues,
     };
+  });
+
+  fastify.get('/cross-case-dedupe', async (request: FastifyRequest<{ Querystring: CrossCaseDedupeQuery }>, reply) => {
+    const { dimensions, minCaseCount = 2 } = request.query;
+    const dims = toArray(dimensions) || ['persons', 'phones', 'locations', 'evidenceNumbers'];
+    const minCount = Number(minCaseCount) || 2;
+
+    const result: any = {};
+
+    if (dims.includes('persons')) {
+      const casePersons = await prisma.casePerson.findMany({
+        include: {
+          person: {
+            select: {
+              id: true,
+              name: true,
+              idCard: true,
+              phone: true,
+              personType: true,
+            },
+          },
+          case: {
+            select: {
+              id: true,
+              caseNumber: true,
+              title: true,
+              caseType: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      const personCaseMap = new Map<string, any>();
+      casePersons.forEach(cp => {
+        const key = cp.person.id;
+        if (!personCaseMap.has(key)) {
+          personCaseMap.set(key, {
+            person: cp.person,
+            cases: [],
+          });
+        }
+        personCaseMap.get(key).cases.push(cp.case);
+      });
+
+      result.persons = Array.from(personCaseMap.values())
+        .filter(item => item.cases.length >= minCount)
+        .map(item => ({
+          ...item.person,
+          caseCount: item.cases.length,
+          cases: item.cases,
+        }))
+        .sort((a, b) => b.caseCount - a.caseCount);
+    }
+
+    if (dims.includes('phones')) {
+      const personsWithPhone = await prisma.person.findMany({
+        where: {
+          phone: { not: null },
+        },
+        include: {
+          casePersons: {
+            include: {
+              case: {
+                select: {
+                  id: true,
+                  caseNumber: true,
+                  title: true,
+                  caseType: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const phoneMap = new Map<string, any>();
+      personsWithPhone.forEach(person => {
+        const phone = person.phone!;
+        if (!phoneMap.has(phone)) {
+          phoneMap.set(phone, {
+            phone,
+            persons: [],
+            cases: [],
+            caseIds: new Set(),
+          });
+        }
+        const entry = phoneMap.get(phone);
+        entry.persons.push({
+          id: person.id,
+          name: person.name,
+          personType: person.personType,
+          idCard: person.idCard,
+        });
+        person.casePersons.forEach(cp => {
+          if (cp.case && !entry.caseIds.has(cp.case.id)) {
+            entry.caseIds.add(cp.case.id);
+            entry.cases.push(cp.case);
+          }
+        });
+      });
+
+      result.phones = Array.from(phoneMap.values())
+        .filter(item => item.cases.length >= minCount)
+        .map(item => ({
+          phone: item.phone,
+          personCount: item.persons.length,
+          persons: item.persons,
+          caseCount: item.cases.length,
+          cases: item.cases,
+        }))
+        .sort((a, b) => b.caseCount - a.caseCount);
+    }
+
+    if (dims.includes('locations')) {
+      const caseLocations = await prisma.case.findMany({
+        where: { location: { not: null } },
+        select: {
+          id: true,
+          caseNumber: true,
+          title: true,
+          caseType: true,
+          status: true,
+          location: true,
+        },
+      });
+
+      const clueLocations = await prisma.clue.findMany({
+        where: { location: { not: null } },
+        select: {
+          id: true,
+          caseId: true,
+          location: true,
+        },
+      });
+
+      const evidenceLocations = await prisma.evidence.findMany({
+        where: { location: { not: null } },
+        select: {
+          id: true,
+          caseId: true,
+          location: true,
+        },
+      });
+
+      const locationMap = new Map<string, any>();
+
+      const normalizeLocation = (loc: string): string => {
+        return loc.trim().toLowerCase();
+      };
+
+      caseLocations.forEach(c => {
+        const key = normalizeLocation(c.location!);
+        if (!locationMap.has(key)) {
+          locationMap.set(key, {
+            location: c.location,
+            cases: [],
+            caseIds: new Set(),
+            clues: [],
+            evidences: [],
+          });
+        }
+        const entry = locationMap.get(key);
+        if (!entry.caseIds.has(c.id)) {
+          entry.caseIds.add(c.id);
+          entry.cases.push({
+            id: c.id,
+            caseNumber: c.caseNumber,
+            title: c.title,
+            caseType: c.caseType,
+            status: c.status,
+            source: 'case',
+          });
+        }
+      });
+
+      clueLocations.forEach(clue => {
+        const key = normalizeLocation(clue.location!);
+        if (!locationMap.has(key)) {
+          locationMap.set(key, {
+            location: clue.location,
+            cases: [],
+            caseIds: new Set(),
+            clues: [],
+            evidences: [],
+          });
+        }
+        const entry = locationMap.get(key);
+        entry.clues.push({
+          id: clue.id,
+          caseId: clue.caseId,
+        });
+        if (clue.caseId && !entry.caseIds.has(clue.caseId)) {
+          entry.caseIds.add(clue.caseId);
+        }
+      });
+
+      evidenceLocations.forEach(evidence => {
+        const key = normalizeLocation(evidence.location!);
+        if (!locationMap.has(key)) {
+          locationMap.set(key, {
+            location: evidence.location,
+            cases: [],
+            caseIds: new Set(),
+            clues: [],
+            evidences: [],
+          });
+        }
+        const entry = locationMap.get(key);
+        entry.evidences.push({
+          id: evidence.id,
+          caseId: evidence.caseId,
+        });
+        if (evidence.caseId && !entry.caseIds.has(evidence.caseId)) {
+          entry.caseIds.add(evidence.caseId);
+        }
+      });
+
+      result.locations = Array.from(locationMap.values())
+        .filter(item => item.caseIds.size >= minCount)
+        .map(item => ({
+          location: item.location,
+          caseCount: item.caseIds.size,
+          cases: item.cases,
+          clueCount: item.clues.length,
+          evidenceCount: item.evidences.length,
+        }))
+        .sort((a, b) => b.caseCount - a.caseCount);
+    }
+
+    if (dims.includes('evidenceNumbers')) {
+      const evidences = await prisma.evidence.findMany({
+        include: {
+          case: {
+            select: {
+              id: true,
+              caseNumber: true,
+              title: true,
+              caseType: true,
+              status: true,
+            },
+          },
+          clue: {
+            select: {
+              id: true,
+              clueNumber: true,
+              title: true,
+            },
+          },
+        },
+      });
+
+      const evidenceNumMap = new Map<string, any>();
+      evidences.forEach(e => {
+        const key = e.evidenceNumber;
+        if (!evidenceNumMap.has(key)) {
+          evidenceNumMap.set(key, {
+            evidenceNumber: key,
+            evidences: [],
+            cases: [],
+            caseIds: new Set(),
+          });
+        }
+        const entry = evidenceNumMap.get(key);
+        entry.evidences.push({
+          id: e.id,
+          name: e.name,
+          type: e.type,
+          status: e.status,
+          clue: e.clue,
+        });
+        if (e.case && !entry.caseIds.has(e.case.id)) {
+          entry.caseIds.add(e.case.id);
+          entry.cases.push(e.case);
+        }
+      });
+
+      result.evidenceNumbers = Array.from(evidenceNumMap.values())
+        .filter(item => item.caseIds.size >= minCount)
+        .map(item => ({
+          evidenceNumber: item.evidenceNumber,
+          evidenceCount: item.evidences.length,
+          evidences: item.evidences,
+          caseCount: item.caseIds.size,
+          cases: item.cases,
+        }))
+        .sort((a, b) => b.caseCount - a.caseCount);
+    }
+
+    return result;
   });
 
   fastify.get('/options', async () => {
