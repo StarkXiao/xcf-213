@@ -170,4 +170,19 @@ export const analysisApi = {
   getCaseCluster: (caseId: string) => api.get(`/analysis/case-cluster/${caseId}`),
 };
 
+export const clueCheckFlowApi = {
+  list: (params?: any) => api.get('/clue-check-flows', { params }),
+  getStats: () => api.get('/clue-check-flows/stats'),
+  get: (id: string) => api.get(`/clue-check-flows/${id}`),
+  register: (data: any) => api.post('/clue-check-flows/register', data),
+  dispatch: (id: string, data: any) => api.post(`/clue-check-flows/${id}/dispatch`, data),
+  verify: (id: string, data: any) => api.post(`/clue-check-flows/${id}/verify`, data),
+  feedback: (id: string, data: any) => api.post(`/clue-check-flows/${id}/feedback`, data),
+  adopt: (id: string, data: any) => api.post(`/clue-check-flows/${id}/adopt`, data),
+  reject: (id: string, data: any) => api.post(`/clue-check-flows/${id}/reject`, data),
+  close: (id: string, data: any) => api.post(`/clue-check-flows/${id}/close`, data),
+  delete: (id: string) => api.delete(`/clue-check-flows/${id}`),
+  getLogs: (id: string, params?: any) => api.get(`/clue-check-flows/${id}/logs`, { params }),
+};
+
 export default api;

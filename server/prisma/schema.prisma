@@ -340,6 +340,125 @@ enum FlowAction {
   UNARCHIVE
 }
 
+enum ClueCheckStatus {
+  REGISTERED
+  DISPATCHED
+  VERIFYING
+  FEEDBACKED
+  ADOPTED
+  REJECTED
+  CLOSED
+}
+
+enum ClueCheckStage {
+  REGISTER
+  DISPATCH
+  VERIFY
+  FEEDBACK
+  ADOPT
+}
+
+model ClueCheckFlow {
+  id               String          @id @default(uuid())
+  flowNumber       String          @unique
+  clueId           String
+  caseId           String?
+  title            String
+  status           ClueCheckStatus @default(REGISTERED)
+  currentStage     ClueCheckStage  @default(REGISTER)
+  priority         String?
+
+  registerContent  String?
+  registerSource   String?
+  registerLocation String?
+  registerTime     DateTime?
+  registerUserId   String?
+  registerUserName String?
+  registerUserDept String?
+
+  dispatchTime     DateTime?
+  dispatchUserId   String?
+  dispatchUserName String?
+  dispatchUserDept String?
+  dispatchToUserId String?
+  dispatchToUserName String?
+  dispatchToUserDept String?
+  dispatchDeadline DateTime?
+  dispatchRemark   String?
+
+  verifyTime       DateTime?
+  verifyUserId     String?
+  verifyUserName   String?
+  verifyUserDept   String?
+  verifyResult     String?
+  verifyConclusion String?
+  verifyLocation   String?
+  verifyEvidenceIds String?
+
+  feedbackTime     DateTime?
+  feedbackUserId   String?
+  feedbackUserName String?
+  feedbackUserDept String?
+  feedbackContent  String?
+  feedbackResult   String?
+  feedbackEvidenceIds String?
+
+  adoptTime        DateTime?
+  adoptUserId      String?
+  adoptUserName    String?
+  adoptUserDept    String?
+  adoptResult      String?
+  adoptOpinion     String?
+  adoptToCaseId    String?
+  adoptEvidenceIds String?
+
+  rejectTime       DateTime?
+  rejectUserId     String?
+  rejectUserName   String?
+  rejectUserDept   String?
+  rejectReason     String?
+
+  closeTime        DateTime?
+  closeUserId      String?
+  closeUserName    String?
+  closeUserDept    String?
+  closeReason      String?
+
+  clue             Clue            @relation(fields: [clueId], references: [id])
+  case             Case?           @relation(fields: [caseId], references: [id])
+  operationLogs    ClueCheckLog[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([clueId])
+  @@index([caseId])
+  @@index([status])
+  @@index([currentStage])
+  @@index([createdAt])
+}
+
+model ClueCheckLog {
+  id            String          @id @default(uuid())
+  flowId        String
+  stage         ClueCheckStage
+  action        String
+  description   String?
+  beforeData    String?
+  afterData     String?
+  operatorId    String?
+  operatorName  String?
+  operatorDept  String?
+  ip            String?
+  userAgent     String?
+  flow          ClueCheckFlow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  actionTime    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+
+  @@index([flowId])
+  @@index([stage])
+  @@index([actionTime])
+}
+
 enum FlowTargetType {
   CASE
   CLUE

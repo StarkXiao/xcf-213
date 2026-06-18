@@ -10,6 +10,7 @@ import {
   FilterOutlined,
   HistoryOutlined,
   ClusterOutlined,
+  SolutionOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -34,6 +35,11 @@ const menuItems = [
     key: '/clues',
     icon: <SearchOutlined />,
     label: '线索录入',
+  },
+  {
+    key: '/clue-check-flows',
+    icon: <SolutionOutlined />,
+    label: '线索核查闭环',
   },
   {
     key: '/persons',

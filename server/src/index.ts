@@ -14,6 +14,7 @@ import searchRoutes from './routes/search';
 import operationLogRoutes from './routes/operationLogs';
 import commandRoutes from './routes/command';
 import analysisRoutes from './routes/analysis';
+import clueCheckFlowRoutes from './routes/clueCheckFlows';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -55,6 +56,7 @@ server.register(searchRoutes, { prefix: '/api/search' });
 server.register(operationLogRoutes, { prefix: '/api/operation-logs' });
 server.register(commandRoutes, { prefix: '/api/command' });
 server.register(analysisRoutes, { prefix: '/api/analysis' });
+server.register(clueCheckFlowRoutes, { prefix: '/api/clue-check-flows' });
 
 const start = async () => {
   try {

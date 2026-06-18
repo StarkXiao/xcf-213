@@ -18,6 +18,8 @@ import EvidenceUpload from './pages/evidences/EvidenceUpload';
 import AdvancedSearch from './pages/search/AdvancedSearch';
 import OperationLogList from './pages/logs/OperationLogList';
 import CrossCaseAnalysis from './pages/analysis/CrossCaseAnalysis';
+import ClueCheckFlowList from './pages/clue-check-flow/ClueCheckFlowList';
+import ClueCheckFlowDetail from './pages/clue-check-flow/ClueCheckFlowDetail';
 
 const { Content } = Layout;
 
@@ -56,6 +58,9 @@ function App() {
             <Route path="/analysis" element={<CrossCaseAnalysis />} />
 
             <Route path="/operation-logs" element={<OperationLogList />} />
+
+            <Route path="/clue-check-flows" element={<ClueCheckFlowList />} />
+            <Route path="/clue-check-flows/:id" element={<ClueCheckFlowDetail />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
