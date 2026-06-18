@@ -24,9 +24,13 @@ model Case {
   reportTime   DateTime?
   caseManager  String?
   department   String?
-  summary      String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  summary           String?
+  caseAnalysis      String?
+  personAnalysis    String?
+  evidenceAnalysis  String?
+  conclusion        String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   clues        Clue[]
   evidences    Evidence[]

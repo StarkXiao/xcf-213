@@ -24,6 +24,10 @@ interface CaseCreate {
   caseManager?: string;
   department?: string;
   summary?: string;
+  caseAnalysis?: string;
+  personAnalysis?: string;
+  evidenceAnalysis?: string;
+  conclusion?: string;
 }
 
 interface CaseUpdate extends Partial<CaseCreate> {}

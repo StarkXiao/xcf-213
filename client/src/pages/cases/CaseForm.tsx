@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Form, Input, Select, DatePicker, Button, Space, message, Row, Col } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, DatePicker, Button, Space, message, Row, Col, Divider } from 'antd';
+import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TeamOutlined, PaperClipOutlined, BulbOutlined } from '@ant-design/icons';
 import { caseApi, searchApi } from '../../services/api';
 
 export default function CaseForm() {
@@ -192,6 +192,79 @@ export default function CaseForm() {
                   rows={4}
                   placeholder="请输入案件摘要（可选）"
                   maxLength={1000}
+                  showCount
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left">
+            <Space>
+              <BulbOutlined style={{ color: '#faad14' }} />
+              <span style={{ fontWeight: 500, fontSize: 16 }}>结构化摘要</span>
+            </Space>
+          </Divider>
+
+          <Row gutter={24}>
+            <Col xs={24}>
+              <Form.Item name="caseAnalysis" label={
+                <Space>
+                  <FileTextOutlined style={{ color: '#1677ff' }} />
+                  <span>案情研判要点</span>
+                </Space>
+              }>
+                <Input.TextArea
+                  rows={4}
+                  placeholder="请归纳案件核心事实、争议焦点、法律适用要点等研判内容"
+                  maxLength={2000}
+                  showCount
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24}>
+              <Form.Item name="personAnalysis" label={
+                <Space>
+                  <TeamOutlined style={{ color: '#52c41a' }} />
+                  <span>涉案人研判要点</span>
+                </Space>
+              }>
+                <Input.TextArea
+                  rows={4}
+                  placeholder="请分析各涉案人员角色定位、责任划分、关系网络、作案动机等"
+                  maxLength={2000}
+                  showCount
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24}>
+              <Form.Item name="evidenceAnalysis" label={
+                <Space>
+                  <PaperClipOutlined style={{ color: '#722ed1' }} />
+                  <span>关键证据研判要点</span>
+                </Space>
+              }>
+                <Input.TextArea
+                  rows={4}
+                  placeholder="请梳理关键证据清单、证明力分析、证据链完整性、存在疑点等"
+                  maxLength={2000}
+                  showCount
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24}>
+              <Form.Item name="conclusion" label={
+                <Space>
+                  <BulbOutlined style={{ color: '#fa8c16' }} />
+                  <span>研判结论</span>
+                </Space>
+              }>
+                <Input.TextArea
+                  rows={4}
+                  placeholder="请填写案件初步定性、处理建议、下一步工作方向、需关注重点等结论性内容"
+                  maxLength={2000}
                   showCount
                 />
               </Form.Item>

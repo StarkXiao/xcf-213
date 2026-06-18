@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { caseApi, personApi, clueApi, evidenceApi } from '../../services/api';
@@ -309,6 +309,160 @@ export default function CaseDetail() {
               </Descriptions.Item>
             )}
           </Descriptions>
+        </div>
+      ),
+    },
+    {
+      key: 'summary',
+      label: (
+        <Space>
+          <BulbOutlined style={{ color: '#faad14' }} />
+          结构化摘要
+        </Space>
+      ),
+      children: (
+        <div>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={12}>
+              <Card
+                title={
+                  <Space>
+                    <FileTextOutlined style={{ color: '#1677ff' }} />
+                    <span>案情研判要点</span>
+                  </Space>
+                }
+                size="small"
+                style={{ minHeight: 200 }}
+              >
+                {caseData.caseAnalysis ? (
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#333' }}>
+                    {caseData.caseAnalysis}
+                  </div>
+                ) : (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '40px 20px' }}>
+                    <InfoCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+                    <div>暂无案情研判内容</div>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => navigate(`/cases/${id}/edit`)}
+                      style={{ marginTop: 8 }}
+                    >
+                      前往编辑
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Card
+                title={
+                  <Space>
+                    <TeamOutlined style={{ color: '#52c41a' }} />
+                    <span>涉案人研判要点</span>
+                  </Space>
+                }
+                size="small"
+                style={{ minHeight: 200 }}
+              >
+                {caseData.personAnalysis ? (
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#333' }}>
+                    {caseData.personAnalysis}
+                  </div>
+                ) : (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '40px 20px' }}>
+                    <InfoCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+                    <div>暂无涉案人研判内容</div>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => navigate(`/cases/${id}/edit`)}
+                      style={{ marginTop: 8 }}
+                    >
+                      前往编辑
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Card
+                title={
+                  <Space>
+                    <PaperClipOutlined style={{ color: '#722ed1' }} />
+                    <span>关键证据研判要点</span>
+                  </Space>
+                }
+                size="small"
+                style={{ minHeight: 200 }}
+              >
+                {caseData.evidenceAnalysis ? (
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#333' }}>
+                    {caseData.evidenceAnalysis}
+                  </div>
+                ) : (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '40px 20px' }}>
+                    <InfoCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+                    <div>暂无关键证据研判内容</div>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => navigate(`/cases/${id}/edit`)}
+                      style={{ marginTop: 8 }}
+                    >
+                      前往编辑
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+
+            <Col xs={24} md={12}>
+              <Card
+                title={
+                  <Space>
+                    <BulbOutlined style={{ color: '#fa8c16' }} />
+                    <span>研判结论</span>
+                  </Space>
+                }
+                size="small"
+                style={{ minHeight: 200 }}
+              >
+                {caseData.conclusion ? (
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#333' }}>
+                    {caseData.conclusion}
+                  </div>
+                ) : (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '40px 20px' }}>
+                    <InfoCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+                    <div>暂无研判结论</div>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => navigate(`/cases/${id}/edit`)}
+                      style={{ marginTop: 8 }}
+                    >
+                      前往编辑
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+          </Row>
+
+          {(caseData.caseAnalysis || caseData.personAnalysis || caseData.evidenceAnalysis || caseData.conclusion) && (
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <Button
+                type="primary"
+                icon={<EditOutlined />}
+                onClick={() => navigate(`/cases/${id}/edit`)}
+              >
+                编辑结构化摘要
+              </Button>
+            </div>
+          )}
         </div>
       ),
     },
