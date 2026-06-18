@@ -81,6 +81,12 @@ export const evidenceApi = {
   download: (id: string) => api.get(`/evidences/${id}/download`, { responseType: 'blob' }),
   getCases: () => api.get('/evidences/cases'),
   getClues: (caseId: string) => api.get(`/evidences/cases/${caseId}/clues`),
+  getBorrowRecords: (id: string, params?: any) => api.get(`/evidences/${id}/borrow-records`, { params }),
+  borrow: (id: string, data: any) => api.post(`/evidences/${id}/borrow`, data),
+  returnEvidence: (id: string, data: any) => api.put(`/evidences/${id}/return`, data),
+  getAllBorrowRecords: (params?: any) => api.get('/evidences/borrow-records/all', { params }),
+  getOperationLogs: (id: string, params?: any) => api.get(`/evidences/${id}/operation-logs`, { params }),
+  getAllOperationLogs: (params?: any) => api.get('/evidences/operation-logs/all', { params }),
 };
 
 export const searchApi = {

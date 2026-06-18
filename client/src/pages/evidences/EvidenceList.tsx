@@ -47,6 +47,12 @@ const fileTypeIcons: Record<string, string> = {
   'other': '📎',
 };
 
+const borrowStatusColors: Record<string, string> = {
+  '未借阅': 'green',
+  '借阅中': 'orange',
+  '已归还': 'blue',
+};
+
 export default function EvidenceList() {
   const navigate = useNavigate();
   const [form] = Form.useForm();
@@ -239,6 +245,24 @@ export default function EvidenceList() {
       dataIndex: 'collector',
       key: 'collector',
       width: 80,
+    },
+    {
+      title: '借阅状态',
+      dataIndex: 'borrowStatus',
+      key: 'borrowStatus',
+      width: 90,
+      render: (text) => (
+        <Tag color={borrowStatusColors[text || '未借阅']}>
+          {text || '未借阅'}
+        </Tag>
+      ),
+    },
+    {
+      title: '当前借阅人',
+      dataIndex: 'currentBorrower',
+      key: 'currentBorrower',
+      width: 100,
+      render: (text) => text || '-',
     },
     {
       title: '上传时间',
