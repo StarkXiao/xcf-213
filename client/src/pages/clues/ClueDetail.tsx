@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col, AutoComplete, Empty, Table } from 'antd';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col, AutoComplete, Empty, Table, Alert } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined, CoffeeOutlined, ScanOutlined, DisconnectOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import { clueApi, personApi, evidenceApi, caseMeetingApi, forensicApi } from '../../services/api';
 import CaseTimeline from '../../components/CaseTimeline';
+import ApprovalInfoPanel, { approvalStatusMap } from '../../components/ApprovalInfoPanel';
 
 const statusColors: Record<string, string> = {
   '待核实': 'default',
@@ -404,6 +405,31 @@ export default function ClueDetail() {
               </Descriptions.Item>
             )}
           </Descriptions>
+
+          {['待核实', '核实中', '已核实'].includes(clueData.status) && !clueData.clueAdoptApproval && (
+            <Alert
+              message="线索采用需通过多级审批"
+              description="请点击下方「发起审批」按钮发起线索采用审批流程，审批通过后方可变更线索状态为「已采用」。"
+              type="warning"
+              showIcon
+              style={{ marginTop: 16 }}
+            />
+          )}
+
+          <div style={{ marginTop: 24 }}>
+            <ApprovalInfoPanel
+              targetType="CLUE"
+              targetId={id!}
+              targetName={clueData.title}
+              targetNumber={clueData.clueNumber}
+              clueId={id}
+              caseId={clueData.caseId}
+              approvals={clueData.approvals}
+              currentApproval={clueData.clueAdoptApproval}
+              allowedCategories={['CLUE_ADOPT']}
+              onApprovalCreated={loadClueData}
+            />
+          </div>
         </div>
       ),
     },

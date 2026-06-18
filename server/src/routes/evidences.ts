@@ -280,7 +280,55 @@ export default async function (fastify: FastifyInstance) {
       return;
     }
 
-    return transformEvidence(evidence);
+    const approvals = await prisma.approvalInstance.findMany({
+      where: { evidenceId: request.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        records: { orderBy: { actionTime: 'asc' } },
+        flow: { select: { id: true, name: true, flowNumber: true, nodes: { orderBy: { level: 'asc' } } } },
+      },
+    });
+
+    const evidenceCheckoutApproval = approvals.find((a: any) => a.category === 'EVIDENCE_CHECKOUT');
+    const evidenceDestroyApproval = approvals.find((a: any) => a.category === 'EVIDENCE_DESTROY');
+
+    const transformed = transformEvidence(evidence);
+    return {
+      ...transformed,
+      approvals: approvals.map((a: any) => ({
+        ...a,
+        categoryLabel: a.category === 'EVIDENCE_CHECKOUT' ? '证据出库' : a.category === 'EVIDENCE_DESTROY' ? '证据销毁' : a.category,
+        statusLabel:
+          a.status === 'PENDING' ? '待审批' :
+          a.status === 'IN_PROGRESS' ? '审批中' :
+          a.status === 'APPROVED' ? '已通过' :
+          a.status === 'REJECTED' ? '已驳回' :
+          a.status === 'ROLLED_BACK' ? '已回退' :
+          a.status === 'CANCELLED' ? '已取消' : a.status,
+      })),
+      evidenceCheckoutApproval: evidenceCheckoutApproval ? {
+        ...evidenceCheckoutApproval,
+        categoryLabel: '证据出库',
+        statusLabel:
+          evidenceCheckoutApproval.status === 'PENDING' ? '待审批' :
+          evidenceCheckoutApproval.status === 'IN_PROGRESS' ? '审批中' :
+          evidenceCheckoutApproval.status === 'APPROVED' ? '已通过' :
+          evidenceCheckoutApproval.status === 'REJECTED' ? '已驳回' :
+          evidenceCheckoutApproval.status === 'ROLLED_BACK' ? '已回退' :
+          evidenceCheckoutApproval.status === 'CANCELLED' ? '已取消' : evidenceCheckoutApproval.status,
+      } : null,
+      evidenceDestroyApproval: evidenceDestroyApproval ? {
+        ...evidenceDestroyApproval,
+        categoryLabel: '证据销毁',
+        statusLabel:
+          evidenceDestroyApproval.status === 'PENDING' ? '待审批' :
+          evidenceDestroyApproval.status === 'IN_PROGRESS' ? '审批中' :
+          evidenceDestroyApproval.status === 'APPROVED' ? '已通过' :
+          evidenceDestroyApproval.status === 'REJECTED' ? '已驳回' :
+          evidenceDestroyApproval.status === 'ROLLED_BACK' ? '已回退' :
+          evidenceDestroyApproval.status === 'CANCELLED' ? '已取消' : evidenceDestroyApproval.status,
+      } : null,
+    };
   });
 
   fastify.post('/', async (request: FastifyRequest<{ Body: EvidenceCreate }>, reply) => {
@@ -754,6 +802,20 @@ export default async function (fastify: FastifyInstance) {
     if (evidence.borrowStatus === '借阅中') {
       reply.status(400).send({ error: '该证据当前已被借阅，无法重复借阅' });
       return;
+    }
+
+    const approvedApproval = await prisma.approvalInstance.findFirst({
+      where: {
+        evidenceId: request.params.id,
+        category: 'EVIDENCE_CHECKOUT',
+        status: 'APPROVED',
+      },
+    });
+    if (!approvedApproval) {
+      return reply.status(400).send({
+        error: '证据出库（借阅）需先通过多级审批，请先发起证据出库审批流程。审批通过后方可执行出库操作。',
+        code: 'APPROVAL_REQUIRED',
+      });
     }
 
     const data = request.body;

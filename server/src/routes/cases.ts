@@ -244,7 +244,54 @@ export default async function (fastify: FastifyInstance) {
       return;
     }
 
-    return caseItem;
+    const approvals = await prisma.approvalInstance.findMany({
+      where: { caseId: request.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        records: { orderBy: { actionTime: 'asc' } },
+        flow: { select: { id: true, name: true, flowNumber: true, nodes: { orderBy: { level: 'asc' } } } },
+      },
+    });
+
+    const caseFilingApproval = approvals.find((a: any) => a.category === 'CASE_FILING');
+    const caseCloseApproval = approvals.find((a: any) => a.category === 'CASE_CLOSE');
+
+    return {
+      ...caseItem,
+      approvals: approvals.map((a: any) => ({
+        ...a,
+        categoryLabel: a.category === 'CASE_FILING' ? '案件立案' : a.category === 'CASE_CLOSE' ? '结案归档' : a.category,
+        statusLabel:
+          a.status === 'PENDING' ? '待审批' :
+          a.status === 'IN_PROGRESS' ? '审批中' :
+          a.status === 'APPROVED' ? '已通过' :
+          a.status === 'REJECTED' ? '已驳回' :
+          a.status === 'ROLLED_BACK' ? '已回退' :
+          a.status === 'CANCELLED' ? '已取消' : a.status,
+      })),
+      caseFilingApproval: caseFilingApproval ? {
+        ...caseFilingApproval,
+        categoryLabel: '案件立案',
+        statusLabel:
+          caseFilingApproval.status === 'PENDING' ? '待审批' :
+          caseFilingApproval.status === 'IN_PROGRESS' ? '审批中' :
+          caseFilingApproval.status === 'APPROVED' ? '已通过' :
+          caseFilingApproval.status === 'REJECTED' ? '已驳回' :
+          caseFilingApproval.status === 'ROLLED_BACK' ? '已回退' :
+          caseFilingApproval.status === 'CANCELLED' ? '已取消' : caseFilingApproval.status,
+      } : null,
+      caseCloseApproval: caseCloseApproval ? {
+        ...caseCloseApproval,
+        categoryLabel: '结案归档',
+        statusLabel:
+          caseCloseApproval.status === 'PENDING' ? '待审批' :
+          caseCloseApproval.status === 'IN_PROGRESS' ? '审批中' :
+          caseCloseApproval.status === 'APPROVED' ? '已通过' :
+          caseCloseApproval.status === 'REJECTED' ? '已驳回' :
+          caseCloseApproval.status === 'ROLLED_BACK' ? '已回退' :
+          caseCloseApproval.status === 'CANCELLED' ? '已取消' : caseCloseApproval.status,
+      } : null,
+    };
   });
 
   fastify.post('/', async (request: FastifyRequest<{ Body: CaseCreate }>, reply) => {
@@ -297,6 +344,38 @@ export default async function (fastify: FastifyInstance) {
       const beforeCase = await prisma.case.findUnique({
         where: { id: request.params.id },
       });
+
+      if (data.status && data.status === '已立案' && beforeCase?.status === '待立案') {
+        const approvedApproval = await prisma.approvalInstance.findFirst({
+          where: {
+            caseId: request.params.id,
+            category: 'CASE_FILING',
+            status: 'APPROVED',
+          },
+        });
+        if (!approvedApproval) {
+          return reply.status(400).send({
+            error: '案件立案需先通过多级审批，请先发起立案审批流程。审批通过后方可变更为"已立案"状态。',
+            code: 'APPROVAL_REQUIRED',
+          });
+        }
+      }
+
+      if (data.status && data.status === '已结案' && !['已结案'].includes(beforeCase?.status || '')) {
+        const approvedApproval = await prisma.approvalInstance.findFirst({
+          where: {
+            caseId: request.params.id,
+            category: 'CASE_CLOSE',
+            status: 'APPROVED',
+          },
+        });
+        if (!approvedApproval) {
+          return reply.status(400).send({
+            error: '案件结案需先通过多级审批，请先发起结案审批流程。审批通过后方可变更为"已结案"状态。',
+            code: 'APPROVAL_REQUIRED',
+          });
+        }
+      }
 
       const caseItem = await prisma.case.update({
         where: { id: request.params.id },

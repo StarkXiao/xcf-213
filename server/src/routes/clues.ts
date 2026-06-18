@@ -109,7 +109,42 @@ export default async function (fastify: FastifyInstance) {
       return;
     }
 
-    return clue;
+    const approvals = await prisma.approvalInstance.findMany({
+      where: { clueId: request.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        records: { orderBy: { actionTime: 'asc' } },
+        flow: { select: { id: true, name: true, flowNumber: true, nodes: { orderBy: { level: 'asc' } } } },
+      },
+    });
+
+    const clueAdoptApproval = approvals.find((a: any) => a.category === 'CLUE_ADOPT');
+
+    return {
+      ...clue,
+      approvals: approvals.map((a: any) => ({
+        ...a,
+        categoryLabel: a.category === 'CLUE_ADOPT' ? '线索采用' : a.category,
+        statusLabel:
+          a.status === 'PENDING' ? '待审批' :
+          a.status === 'IN_PROGRESS' ? '审批中' :
+          a.status === 'APPROVED' ? '已通过' :
+          a.status === 'REJECTED' ? '已驳回' :
+          a.status === 'ROLLED_BACK' ? '已回退' :
+          a.status === 'CANCELLED' ? '已取消' : a.status,
+      })),
+      clueAdoptApproval: clueAdoptApproval ? {
+        ...clueAdoptApproval,
+        categoryLabel: '线索采用',
+        statusLabel:
+          clueAdoptApproval.status === 'PENDING' ? '待审批' :
+          clueAdoptApproval.status === 'IN_PROGRESS' ? '审批中' :
+          clueAdoptApproval.status === 'APPROVED' ? '已通过' :
+          clueAdoptApproval.status === 'REJECTED' ? '已驳回' :
+          clueAdoptApproval.status === 'ROLLED_BACK' ? '已回退' :
+          clueAdoptApproval.status === 'CANCELLED' ? '已取消' : clueAdoptApproval.status,
+      } : null,
+    };
   });
 
   fastify.post('/', async (request: FastifyRequest<{ Body: ClueCreate }>, reply) => {
@@ -182,6 +217,22 @@ export default async function (fastify: FastifyInstance) {
       const beforeClue = await prisma.clue.findUnique({
         where: { id: request.params.id },
       });
+
+      if (data.status && data.status === '已采用' && beforeClue?.status !== '已采用') {
+        const approvedApproval = await prisma.approvalInstance.findFirst({
+          where: {
+            clueId: request.params.id,
+            category: 'CLUE_ADOPT',
+            status: 'APPROVED',
+          },
+        });
+        if (!approvedApproval) {
+          return reply.status(400).send({
+            error: '线索采用需先通过多级审批，请先发起线索采用审批流程。审批通过后方可变更为"已采用"状态。',
+            code: 'APPROVAL_REQUIRED',
+          });
+        }
+      }
 
       const clue = await prisma.clue.update({
         where: { id: request.params.id },
@@ -718,6 +769,22 @@ export default async function (fastify: FastifyInstance) {
       for (const clue of clues) {
         currentCount += 1;
         const evidenceNumber = `ZJ${new Date().getFullYear()}${String(currentCount).padStart(6, '0')}`;
+
+        if (clue.status !== '已采用') {
+          const approvedApproval = await prisma.approvalInstance.findFirst({
+            where: {
+              clueId: clue.id,
+              category: 'CLUE_ADOPT',
+              status: 'APPROVED',
+            },
+          });
+          if (!approvedApproval) {
+            return reply.status(400).send({
+              error: `线索「${clue.title}」尚未通过采用审批。所有线索需先通过多级审批后方可批量转证据。`,
+              code: 'APPROVAL_REQUIRED',
+            });
+          }
+        }
 
         const evidenceDescLines = [
           `来源线索：${clue.clueNumber} - ${clue.title}`,

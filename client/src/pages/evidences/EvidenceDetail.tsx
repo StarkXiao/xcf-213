@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, message, Popconfirm, Image, Row, Col, Typography, Modal, Form, Select, Input, List, Empty } from 'antd';
+import { Card, Descriptions, Tag, Button, Space, message, Popconfirm, Image, Row, Col, Typography, Modal, Form, Select, Input, List, Empty, Alert } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, FileTextOutlined, VideoCameraOutlined, AudioOutlined, FileUnknownOutlined, CoffeeOutlined, PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import { evidenceApi, caseMeetingApi } from '../../services/api';
+import ApprovalInfoPanel from '../../components/ApprovalInfoPanel';
 
 const { Title, Paragraph } = Typography;
 
@@ -193,6 +194,33 @@ export default function EvidenceDetail() {
             <Paragraph style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: 14 }}>
               {evidence.description || '暂无描述'}
             </Paragraph>
+          </Card>
+
+          {['已入库', '已鉴定'].includes(evidence.status) && evidence.borrowStatus !== '借阅中' && !evidence.evidenceCheckoutApproval && (
+            <Card className="card-shadow" style={{ marginTop: 16 }}>
+              <Alert
+                message="证据出库需通过多级审批"
+                description="请点击下方「发起审批」按钮发起证据出库审批流程，审批通过后方可执行出库（借阅）操作。"
+                type="warning"
+                showIcon
+              />
+            </Card>
+          )}
+
+          <Card className="card-shadow" style={{ marginTop: 16 }}>
+            <ApprovalInfoPanel
+              targetType="EVIDENCE"
+              targetId={id!}
+              targetName={evidence.name}
+              targetNumber={evidence.evidenceNumber}
+              evidenceId={id}
+              caseId={evidence.caseId}
+              clueId={evidence.clueId}
+              approvals={evidence.approvals}
+              currentApproval={evidence.evidenceCheckoutApproval}
+              allowedCategories={['EVIDENCE_CHECKOUT', 'EVIDENCE_DESTROY']}
+              onApprovalCreated={loadEvidence}
+            />
           </Card>
         </Col>
 

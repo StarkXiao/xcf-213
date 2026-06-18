@@ -6,6 +6,7 @@ import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { caseApi, personApi, clueApi, evidenceApi, caseMeetingApi, forensicApi } from '../../services/api';
 import CaseTimeline from '../../components/CaseTimeline';
+import ApprovalInfoPanel from '../../components/ApprovalInfoPanel';
 
 const statusColors: Record<string, string> = {
   '待立案': 'default',
@@ -468,6 +469,30 @@ export default function CaseDetail() {
               </Descriptions.Item>
             )}
           </Descriptions>
+
+          {caseData.status === '待立案' && !caseData.caseFilingApproval && (
+            <Alert
+              message="案件立案需通过多级审批"
+              description="请点击下方「发起审批」按钮发起立案审批流程，审批通过后方可变更案件状态为「已立案」。"
+              type="warning"
+              showIcon
+              style={{ marginTop: 16 }}
+            />
+          )}
+
+          <div style={{ marginTop: 24 }}>
+            <ApprovalInfoPanel
+              targetType="CASE"
+              targetId={id!}
+              targetName={caseData.title}
+              targetNumber={caseData.caseNumber}
+              caseId={id}
+              approvals={caseData.approvals}
+              currentApproval={caseData.caseFilingApproval}
+              allowedCategories={['CASE_FILING', 'CASE_CLOSE', 'CASE_TRANSFER']}
+              onApprovalCreated={loadCaseData}
+            />
+          </div>
         </div>
       ),
     },

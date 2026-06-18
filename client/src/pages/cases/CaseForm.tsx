@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Form, Input, Select, DatePicker, Button, Space, message, Row, Col, Divider } from 'antd';
+import { Card, Form, Input, Select, DatePicker, Button, Space, message, Row, Col, Divider, Alert } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TeamOutlined, PaperClipOutlined, BulbOutlined } from '@ant-design/icons';
 import { caseApi, searchApi } from '../../services/api';
 
@@ -10,6 +10,7 @@ export default function CaseForm() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<any>({});
+  const [caseData, setCaseData] = useState<any>(null);
   const isEdit = !!id;
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function CaseForm() {
     try {
       const res = await caseApi.get(id!);
       const data = res.data;
+      setCaseData(data);
       form.setFieldsValue({
         ...data,
         occurTime: data.occurTime ? data.occurTime : null,
@@ -43,6 +45,20 @@ export default function CaseForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getStatusOptions = () => {
+    if (!options.caseStatuses) return [];
+    return options.caseStatuses.map((t: string) => {
+      const disabled = isEdit && ['已立案', '已结案'].includes(t) &&
+        (t === '已立案' && caseData?.status !== '已立案' && (!caseData?.caseFilingApproval || caseData?.caseFilingApproval?.status !== 'APPROVED')) ||
+        (t === '已结案' && caseData?.status !== '已结案');
+      return {
+        label: t + (disabled ? ' (需审批)' : ''),
+        value: t,
+        disabled,
+      };
+    });
   };
 
   const handleSubmit = async (values: any) => {
@@ -120,9 +136,18 @@ export default function CaseForm() {
               >
                 <Select
                   placeholder="请选择案件状态"
-                  options={options.caseStatuses?.map((t: string) => ({ label: t, value: t }))}
+                  options={getStatusOptions()}
                 />
               </Form.Item>
+              {isEdit && caseData && (
+                <Alert
+                  message="状态变更需审批"
+                  description="变更为「已立案」或「已结案」状态需先通过多级审批。请在案件详情页发起相应的审批流程，审批通过后方可在此处选择对应状态。"
+                  type="info"
+                  showIcon
+                  style={{ marginTop: -8, marginBottom: 16 }}
+                />
+              )}
             </Col>
             <Col xs={24} md={8}>
               <Form.Item

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Form, Input, Select, DatePicker, Button, Space, message, Row, Col } from 'antd';
+import { Card, Form, Input, Select, DatePicker, Button, Space, message, Row, Col, Alert } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { clueApi, caseApi, searchApi } from '../../services/api';
 
@@ -12,6 +12,7 @@ export default function ClueForm() {
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<any>({});
   const [cases, setCases] = useState<any[]>([]);
+  const [clueData, setClueData] = useState<any>(null);
   const isEdit = !!id;
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function ClueForm() {
     try {
       const res = await clueApi.get(id!);
       const data = res.data;
+      setClueData(data);
       form.setFieldsValue({
         ...data,
         findTime: data.findTime ? data.findTime : null,
@@ -62,6 +64,20 @@ export default function ClueForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getStatusOptions = () => {
+    if (!options.clueStatuses) return [];
+    return options.clueStatuses.map((t: string) => {
+      const disabled = isEdit && t === '已采用' &&
+        clueData?.status !== '已采用' &&
+        (!clueData?.clueAdoptApproval || clueData?.clueAdoptApproval?.status !== 'APPROVED');
+      return {
+        label: t + (disabled ? ' (需审批)' : ''),
+        value: t,
+        disabled,
+      };
+    });
   };
 
   const handleSubmit = async (values: any) => {
@@ -163,9 +179,18 @@ export default function ClueForm() {
               >
                 <Select
                   placeholder="请选择状态"
-                  options={options.clueStatuses?.map((t: string) => ({ label: t, value: t }))}
+                  options={getStatusOptions()}
                 />
               </Form.Item>
+              {isEdit && clueData && (
+                <Alert
+                  message="状态变更需审批"
+                  description="变更为「已采用」状态需先通过多级审批。请在线索详情页发起线索采用审批流程，审批通过后方可在此处选择「已采用」状态。"
+                  type="info"
+                  showIcon
+                  style={{ marginTop: -8, marginBottom: 16 }}
+                />
+              )}
             </Col>
 
             <Col xs={24} md={8}>
