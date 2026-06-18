@@ -267,6 +267,8 @@ export default async function (fastify: FastifyInstance) {
   fastify.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     try {
       await prisma.$transaction([
+        prisma.caseRelation.deleteMany({ where: { sourceCaseId: request.params.id } }),
+        prisma.caseRelation.deleteMany({ where: { targetCaseId: request.params.id } }),
         prisma.evidence.deleteMany({ where: { caseId: request.params.id } }),
         prisma.clue.updateMany({ where: { caseId: request.params.id }, data: { caseId: null } }),
         prisma.casePerson.deleteMany({ where: { caseId: request.params.id } }),
@@ -376,5 +378,124 @@ export default async function (fastify: FastifyInstance) {
     }));
 
     return { nodes, edges };
+  });
+
+  fastify.get('/:id/thematic-view', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const caseItem = await prisma.case.findUnique({
+      where: { id: request.params.id },
+      include: {
+        clues: {
+          include: {
+            cluePersons: { include: { person: true } },
+          },
+        },
+        evidences: true,
+        casePersons: { include: { person: true } },
+        sourceRelations: {
+          include: {
+            targetCase: {
+              include: {
+                clues: {
+                  include: {
+                    cluePersons: { include: { person: true } },
+                  },
+                },
+                evidences: true,
+                casePersons: { include: { person: true } },
+              },
+            },
+          },
+        },
+        targetRelations: {
+          include: {
+            sourceCase: {
+              include: {
+                clues: {
+                  include: {
+                    cluePersons: { include: { person: true } },
+                  },
+                },
+                evidences: true,
+                casePersons: { include: { person: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!caseItem) {
+      reply.status(404).send({ error: '案件不存在' });
+      return;
+    }
+
+    const relatedCases = [
+      ...caseItem.sourceRelations.map((r: any) => ({
+        ...r.targetCase,
+        _relationType: r.relationType,
+      })),
+      ...caseItem.targetRelations.map((r: any) => ({
+        ...r.sourceCase,
+        _relationType: r.relationType,
+      })),
+    ];
+
+    const allClues = [...caseItem.clues];
+    const allEvidences = [...caseItem.evidences];
+    const allCasePersons = [...caseItem.casePersons];
+    const personIdSet = new Set(caseItem.casePersons.map((cp: any) => cp.personId));
+
+    relatedCases.forEach((rc: any) => {
+      (rc.clues || []).forEach((clue: any) => {
+        if (!allClues.find(c => c.id === clue.id)) {
+          allClues.push({ ...clue, _sourceCase: { id: rc.id, caseNumber: rc.caseNumber, title: rc.title } });
+        }
+      });
+
+      (rc.evidences || []).forEach((evidence: any) => {
+        if (!allEvidences.find(e => e.id === evidence.id)) {
+          allEvidences.push({ ...evidence, _sourceCase: { id: rc.id, caseNumber: rc.caseNumber, title: rc.title } });
+        }
+      });
+
+      (rc.casePersons || []).forEach((cp: any) => {
+        if (!personIdSet.has(cp.personId)) {
+          personIdSet.add(cp.personId);
+          allCasePersons.push({ ...cp, _sourceCase: { id: rc.id, caseNumber: rc.caseNumber, title: rc.title } });
+        }
+      });
+    });
+
+    const { sourceRelations, targetRelations, clues, evidences, casePersons, ...caseInfo } = caseItem;
+
+    return {
+      case: caseInfo,
+      relatedCases: relatedCases.map((rc: any) => {
+        const { clues, evidences, casePersons, ...rest } = rc;
+        return rest;
+      }),
+      aggregated: {
+        cases: relatedCases.map((rc: any) => ({
+          id: rc.id,
+          caseNumber: rc.caseNumber,
+          title: rc.title,
+          caseType: rc.caseType,
+          status: rc.status,
+          priority: rc.priority,
+          caseManager: rc.caseManager,
+          department: rc.department,
+          createdAt: rc.createdAt,
+          clueCount: rc.clues?.length || 0,
+          evidenceCount: rc.evidences?.length || 0,
+          personCount: rc.casePersons?.length || 0,
+        })),
+        totalClues: allClues.length,
+        totalEvidences: allEvidences.length,
+        totalPersons: allCasePersons.length,
+        clues: allClues,
+        evidences: allEvidences,
+        casePersons: allCasePersons,
+      },
+    };
   });
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined } from '@ant-design/icons';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { caseApi, personApi, clueApi, evidenceApi } from '../../services/api';
@@ -78,19 +78,25 @@ const stageStatusMap: Record<string, number> = {
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [personModal, setPersonModal] = useState(false);
   const [personForm] = Form.useForm();
   const [allPersons, setAllPersons] = useState<any[]>([]);
   const [relations, setRelations] = useState<any>({ nodes: [], edges: [] });
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'overview');
+  const [thematicData, setThematicData] = useState<any>(null);
+  const [thematicLoading, setThematicLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
       loadCaseData();
       loadAllPersons();
       loadRelations();
+      if (searchParams.get('tab') === 'thematic') {
+        loadThematicView();
+      }
     }
   }, [id]);
 
@@ -121,6 +127,25 @@ export default function CaseDetail() {
       setRelations(res.data);
     } catch (error) {
       console.error('Failed to load relations:', error);
+    }
+  };
+
+  const loadThematicView = async () => {
+    setThematicLoading(true);
+    try {
+      const res = await caseApi.getThematicView(id!);
+      setThematicData(res.data);
+    } catch (error) {
+      console.error('Failed to load thematic view:', error);
+    } finally {
+      setThematicLoading(false);
+    }
+  };
+
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    if (key === 'thematic' && !thematicData) {
+      loadThematicView();
     }
   };
 
@@ -727,6 +752,271 @@ export default function CaseDetail() {
         </div>
       ),
     },
+    {
+      key: 'thematic',
+      label: caseData.caseType === '专案' ? (
+        <Space><FundProjectionScreenOutlined /> 专题视图</Space>
+      ) : (
+        <Space><FundProjectionScreenOutlined /> 关联汇总</Space>
+      ),
+      children: (
+        <div>
+          {!thematicData && !thematicLoading && (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Button type="primary" icon={<FundProjectionScreenOutlined />} onClick={loadThematicView} loading={thematicLoading}>
+                加载专题视图
+              </Button>
+            </div>
+          )}
+          {thematicLoading && (
+            <Card loading style={{ minHeight: 200 }} />
+          )}
+          {thematicData && !thematicLoading && (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                icon={<FundProjectionScreenOutlined />}
+                message={`本专案聚合了 ${thematicData.aggregated.cases.length} 个关联案件的全部数据，共 ${thematicData.aggregated.totalPersons} 人、${thematicData.aggregated.totalClues} 条线索、${thematicData.aggregated.totalEvidences} 份证据`}
+                style={{ marginBottom: 16 }}
+              />
+
+              <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Col span={6}>
+                  <Card size="small" style={{ textAlign: 'center', background: '#f0f5ff' }}>
+                    <Statistic
+                      title="关联案件"
+                      value={thematicData.aggregated.cases.length}
+                      suffix="个"
+                      prefix={<FileTextOutlined style={{ color: '#1677ff' }} />}
+                      valueStyle={{ color: '#1677ff' }}
+                    />
+                  </Card>
+                </Col>
+                <Col span={6}>
+                  <Card size="small" style={{ textAlign: 'center', background: '#f6ffed' }}>
+                    <Statistic
+                      title="涉案人员"
+                      value={thematicData.aggregated.totalPersons}
+                      suffix="人"
+                      prefix={<TeamOutlined style={{ color: '#52c41a' }} />}
+                      valueStyle={{ color: '#52c41a' }}
+                    />
+                  </Card>
+                </Col>
+                <Col span={6}>
+                  <Card size="small" style={{ textAlign: 'center', background: '#fff7e6' }}>
+                    <Statistic
+                      title="关联线索"
+                      value={thematicData.aggregated.totalClues}
+                      suffix="条"
+                      prefix={<BulbOutlined style={{ color: '#fa8c16' }} />}
+                      valueStyle={{ color: '#fa8c16' }}
+                    />
+                  </Card>
+                </Col>
+                <Col span={6}>
+                  <Card size="small" style={{ textAlign: 'center', background: '#f9f0ff' }}>
+                    <Statistic
+                      title="关联证据"
+                      value={thematicData.aggregated.totalEvidences}
+                      suffix="份"
+                      prefix={<PaperClipOutlined style={{ color: '#722ed1' }} />}
+                      valueStyle={{ color: '#722ed1' }}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+
+              {thematicData.aggregated.cases.length > 0 && (
+                <Card
+                  title={<Space><LinkOutlined /> 关联案件</Space>}
+                  size="small"
+                  style={{ marginBottom: 16 }}
+                >
+                  <Table
+                    dataSource={thematicData.aggregated.cases}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    columns={[
+                      {
+                        title: '案件编号',
+                        dataIndex: 'caseNumber',
+                        width: 140,
+                        render: (text: string, record: any) => (
+                          <a onClick={() => navigate(`/cases/${record.id}`)}>
+                            <span style={{ fontFamily: 'monospace', color: '#1677ff' }}>{text}</span>
+                          </a>
+                        ),
+                      },
+                      { title: '案件标题', dataIndex: 'title', width: 200 },
+                      {
+                        title: '类型',
+                        dataIndex: 'caseType',
+                        width: 100,
+                        render: (text) => <Tag color="blue">{text}</Tag>,
+                      },
+                      {
+                        title: '状态',
+                        dataIndex: 'status',
+                        width: 90,
+                        render: (text) => <Tag color={statusColors[text]}>{text}</Tag>,
+                      },
+                      {
+                        title: '主办人',
+                        dataIndex: 'caseManager',
+                        width: 80,
+                      },
+                      {
+                        title: '线索',
+                        dataIndex: 'clueCount',
+                        width: 70,
+                        render: (text) => <Tag color="orange">{text} 条</Tag>,
+                      },
+                      {
+                        title: '证据',
+                        dataIndex: 'evidenceCount',
+                        width: 70,
+                        render: (text) => <Tag color="purple">{text} 份</Tag>,
+                      },
+                      {
+                        title: '人员',
+                        dataIndex: 'personCount',
+                        width: 70,
+                        render: (text) => <Tag color="green">{text} 人</Tag>,
+                      },
+                    ]}
+                  />
+                </Card>
+              )}
+
+              <Card
+                title={<Space><TeamOutlined style={{ color: '#52c41a' }} /> 涉案人员汇总 ({thematicData.aggregated.totalPersons})</Space>}
+                size="small"
+                style={{ marginBottom: 16 }}
+              >
+                <List
+                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 4, xl: 4 }}
+                  dataSource={thematicData.aggregated.casePersons}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Card size="small" hoverable onClick={() => navigate(`/persons/${item.personId}`)} style={{ cursor: 'pointer' }}>
+                        <Card.Meta
+                          avatar={
+                            <Avatar style={{
+                              backgroundColor:
+                                item.person?.personType === '嫌疑人' ? '#ff4d4f'
+                                : item.person?.personType === '受害人' ? '#faad14'
+                                : item.person?.personType === '证人' ? '#52c41a'
+                                : '#1677ff',
+                            }}>
+                              {item.person?.name?.charAt(0)}
+                            </Avatar>
+                          }
+                          title={
+                            <Space size={4}>
+                              <span style={{ fontSize: 13 }}>{item.person?.name}</span>
+                              <Tag color={personTypeColors[item.person?.personType]} style={{ fontSize: 11 }}>{item.person?.personType}</Tag>
+                            </Space>
+                          }
+                          description={
+                            <div style={{ fontSize: 12 }}>
+                              <div><Tag color="blue" style={{ fontSize: 11 }}>{item.role}</Tag></div>
+                              {item._sourceCase && (
+                                <div style={{ marginTop: 4, color: '#999' }}>
+                                  来自: <a onClick={(e) => { e.stopPropagation(); navigate(`/cases/${item._sourceCase.id}`); }}>{item._sourceCase.caseNumber}</a>
+                                </div>
+                              )}
+                              <div style={{ marginTop: 4, color: '#666' }}>{item.person?.phone || '-'} | {item.person?.idCard || '-'}</div>
+                            </div>
+                          }
+                        />
+                      </Card>
+                    </List.Item>
+                  )}
+                />
+              </Card>
+
+              <Card
+                title={<Space><BulbOutlined style={{ color: '#fa8c16' }} /> 线索汇总 ({thematicData.aggregated.totalClues})</Space>}
+                size="small"
+                style={{ marginBottom: 16 }}
+              >
+                <List
+                  dataSource={thematicData.aggregated.clues}
+                  renderItem={(item: any) => (
+                    <List.Item
+                      actions={[
+                        <Button type="link" size="small" onClick={() => navigate(`/clues/${item.id}`)}>详情</Button>,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={
+                          <Space size={4}>
+                            <a onClick={() => navigate(`/clues/${item.id}`)}>{item.title}</a>
+                            <Tag color={statusColors[item.status]}>{item.status}</Tag>
+                            {item.credibility && <Tag color={credibilityColors[item.credibility]}>可信度: {item.credibility}</Tag>}
+                            {item._sourceCase && (
+                              <Tag color="geekblue" icon={<LinkOutlined />}>
+                                来自: <a onClick={(e) => { e.stopPropagation(); navigate(`/cases/${item._sourceCase.id}`); }} style={{ color: 'inherit' }}>{item._sourceCase.caseNumber}</a>
+                              </Tag>
+                            )}
+                          </Space>
+                        }
+                        description={
+                          <div>
+                            <div style={{ color: '#666', marginBottom: 4 }}>{item.content}</div>
+                            <div style={{ fontSize: 12, color: '#999' }}>
+                              来源: {item.source} | {moment(item.createdAt).format('YYYY-MM-DD HH:mm')}
+                            </div>
+                          </div>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              </Card>
+
+              <Card
+                title={<Space><PaperClipOutlined style={{ color: '#722ed1' }} /> 证据汇总 ({thematicData.aggregated.totalEvidences})</Space>}
+                size="small"
+              >
+                <List
+                  grid={{ gutter: 16, xs: 1, sm: 2, md: 3, xl: 4 }}
+                  dataSource={thematicData.aggregated.evidences}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Card size="small" hoverable onClick={() => navigate(`/evidences/${item.id}`)} style={{ cursor: 'pointer' }}>
+                        <Card.Meta
+                          title={
+                            <Space size={4}>
+                              <span style={{ fontSize: 13 }}>{item.name}</span>
+                              <Tag color={evidenceTypeColors[item.type]} style={{ fontSize: 11 }}>{item.type}</Tag>
+                            </Space>
+                          }
+                          description={
+                            <div style={{ fontSize: 12 }}>
+                              <div style={{ marginBottom: 4, fontFamily: 'monospace', color: '#722ed1' }}>{item.evidenceNumber}</div>
+                              {item._sourceCase && (
+                                <div style={{ marginBottom: 4, color: '#999' }}>
+                                  来自: <a onClick={(e) => { e.stopPropagation(); navigate(`/cases/${item._sourceCase.id}`); }}>{item._sourceCase.caseNumber}</a>
+                                </div>
+                              )}
+                              <Tag color={statusColors[item.status]} style={{ fontSize: 11 }}>{item.status}</Tag>
+                            </div>
+                          }
+                        />
+                      </Card>
+                    </List.Item>
+                  )}
+                />
+              </Card>
+            </>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -746,7 +1036,7 @@ export default function CaseDetail() {
       </div>
 
       <Card className="card-shadow" loading={loading}>
-        <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
+        <Tabs items={tabItems} activeKey={activeTab} onChange={handleTabChange} />
       </Card>
 
       <Modal

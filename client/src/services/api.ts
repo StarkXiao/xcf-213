@@ -25,6 +25,7 @@ export const caseApi = {
   getEvidences: (id: string) => api.get(`/cases/${id}/evidences`),
   getPersons: (id: string) => api.get(`/cases/${id}/persons`),
   getRelations: (id: string) => api.get(`/cases/${id}/relations`),
+  getThematicView: (id: string) => api.get(`/cases/${id}/thematic-view`),
 };
 
 export const clueApi = {

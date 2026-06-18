@@ -725,6 +725,8 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
+    const relatedCaseIds = new Set<string>(caseIds);
+
     if (personIds.length > 0) {
       const existingCasePersons = await prisma.casePerson.findMany({
         where: { caseId: caseItem.id, personId: { in: personIds } },
@@ -746,29 +748,59 @@ export default async function (fastify: FastifyInstance) {
     }
 
     if (clueIds.length > 0) {
-      const unassignedClues = await prisma.clue.findMany({
-        where: { id: { in: clueIds }, caseId: null },
-        select: { id: true },
+      const clues = await prisma.clue.findMany({
+        where: { id: { in: clueIds } },
+        select: { id: true, caseId: true },
       });
-      if (unassignedClues.length > 0) {
+
+      const unassignedClueIds = clues.filter(c => !c.caseId).map(c => c.id);
+      if (unassignedClueIds.length > 0) {
         await prisma.clue.updateMany({
-          where: { id: { in: unassignedClues.map(c => c.id) } },
+          where: { id: { in: unassignedClueIds } },
           data: { caseId: caseItem.id },
         });
       }
+
+      clues.forEach(c => {
+        if (c.caseId && c.caseId !== caseItem.id) {
+          relatedCaseIds.add(c.caseId);
+        }
+      });
     }
 
     if (evidenceIds.length > 0) {
-      const unassignedEvidences = await prisma.evidence.findMany({
-        where: { id: { in: evidenceIds }, caseId: null },
-        select: { id: true },
+      const evidences = await prisma.evidence.findMany({
+        where: { id: { in: evidenceIds } },
+        select: { id: true, caseId: true },
       });
-      if (unassignedEvidences.length > 0) {
+
+      const unassignedEvidenceIds = evidences.filter(e => !e.caseId).map(e => e.id);
+      if (unassignedEvidenceIds.length > 0) {
         await prisma.evidence.updateMany({
-          where: { id: { in: unassignedEvidences.map(e => e.id) } },
+          where: { id: { in: unassignedEvidenceIds } },
           data: { caseId: caseItem.id },
         });
       }
+
+      evidences.forEach(e => {
+        if (e.caseId && e.caseId !== caseItem.id) {
+          relatedCaseIds.add(e.caseId);
+        }
+      });
+    }
+
+    relatedCaseIds.delete(caseItem.id);
+
+    if (relatedCaseIds.size > 0) {
+      await prisma.caseRelation.createMany({
+        data: Array.from(relatedCaseIds).map(targetCaseId => ({
+          sourceCaseId: caseItem.id,
+          targetCaseId,
+          relationType: '专题关联',
+          description: `专案「${title}」关联案件`,
+        })),
+        skipDuplicates: true,
+      });
     }
 
     const result = await prisma.case.findUnique({
@@ -777,6 +809,23 @@ export default async function (fastify: FastifyInstance) {
         clues: true,
         evidences: true,
         casePersons: { include: { person: true } },
+        sourceRelations: {
+          include: {
+            targetCase: {
+              select: {
+                id: true,
+                caseNumber: true,
+                title: true,
+                caseType: true,
+                status: true,
+                priority: true,
+                caseManager: true,
+                department: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
       },
     });
 

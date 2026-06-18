@@ -128,7 +128,7 @@ export default function AdvancedSearch() {
       });
       message.success('专案创建成功');
       setCreateCaseModal(false);
-      navigate(`/cases/${res.data.id}`);
+      navigate(`/cases/${res.data.id}?tab=thematic`);
     } catch (error) {
       message.error('专案创建失败');
     } finally {
