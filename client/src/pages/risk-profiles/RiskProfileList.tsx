@@ -6,7 +6,8 @@ import {
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, EyeOutlined, WarningOutlined,
-  ExclamationCircleOutlined, UserOutlined, FileTextOutlined, BulbOutlined
+  ExclamationCircleOutlined, UserOutlined, FileTextOutlined, BulbOutlined,
+  PaperClipOutlined
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import moment from 'moment';
@@ -207,7 +208,7 @@ export default function RiskProfileList() {
       sorter: (a: any, b: any) => a.riskScore - b.riskScore,
       render: (level: string, record: any) => {
         const config = riskLevelConfig[level] || riskLevelConfig.LOW;
-        const percent = Math.min(100, Math.round((record.riskScore / 60) * 100));
+        const percent = Math.min(100, Math.round((record.riskScore / 80) * 100));
         return (
           <div>
             <Badge
@@ -261,6 +262,20 @@ export default function RiskProfileList() {
           <BulbOutlined style={{ color: '#13c2c2' }} />
           <span style={{ fontWeight: 600 }}>{count}</span>
           <span style={{ color: '#999' }}>条</span>
+        </Space>
+      ),
+    },
+    {
+      title: '证据关联',
+      dataIndex: 'evidenceCount',
+      key: 'evidenceCount',
+      width: 120,
+      sorter: (a: any, b: any) => a.evidenceCount - b.evidenceCount,
+      render: (count: number) => (
+        <Space>
+          <PaperClipOutlined style={{ color: '#fa8c16' }} />
+          <span style={{ fontWeight: 600 }}>{count}</span>
+          <span style={{ color: '#999' }}>份</span>
         </Space>
       ),
     },
@@ -494,8 +509,9 @@ export default function RiskProfileList() {
                         <span>风险分: <strong style={{ color: riskLevelConfig[p.riskLevel]?.color }}>{p.score}</strong></span>
                       </Space>
                       <Space style={{ fontSize: 12, color: '#999' }}>
-                        <FileTextOutlined /> {p.caseCount}起案件
-                        <BulbOutlined /> {p.clueCount}条线索
+                        <FileTextOutlined /> {p.caseCount}起
+                        <BulbOutlined /> {p.clueCount}条
+                        <PaperClipOutlined /> {p.evidenceCount || 0}份
                       </Space>
                     </Space>
                   </Card>
@@ -549,6 +565,7 @@ export default function RiskProfileList() {
                 <Option value="score">按风险分</Option>
                 <Option value="cases">按案件数</Option>
                 <Option value="clues">按线索数</Option>
+                <Option value="evidences">按证据数</Option>
               </Select>
             </Form.Item>
             <Form.Item name="sortOrder" label="排序方式" initialValue="desc">

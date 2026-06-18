@@ -11,13 +11,6 @@ interface RiskProfileQuery {
   sortOrder?: string;
 }
 
-const riskLevelWeights: Record<string, number> = {
-  CRITICAL: 4,
-  HIGH: 3,
-  MEDIUM: 2,
-  LOW: 1,
-};
-
 const caseTypeRiskScores: Record<string, number> = {
   '暴力犯罪': 10,
   '经济犯罪': 8,
@@ -46,7 +39,96 @@ const roleRiskScores: Record<string, number> = {
   '嫌疑人': 7,
 };
 
-function calculateRiskScore(person: any): {
+const evidenceTypeRiskScores: Record<string, number> = {
+  '物证': 5,
+  '书证': 4,
+  '鉴定意见': 4,
+  '勘验笔录': 3,
+  '视听资料': 3,
+  '电子数据': 3,
+  '犯罪嫌疑人供述': 4,
+  '被害人陈述': 2,
+  '证人证言': 2,
+  '其他': 1,
+};
+
+const evidenceStatusRiskScores: Record<string, number> = {
+  '已鉴定': 3,
+  '已采信': 4,
+  '待鉴定': 1,
+  '已入库': 1,
+  '其他': 1,
+};
+
+function calculateEvidenceScore(evidences: any[]): {
+  score: number;
+  breakdown: {
+    typeScore: number;
+    quantityBonus: number;
+    chainBonus: number;
+  };
+  details: string[];
+} {
+  const details: string[] = [];
+  let typeScore = 0;
+  let evidenceTypes = new Set<string>();
+  let evidenceCount = evidences?.length || 0;
+
+  if (!evidences || evidences.length === 0) {
+    return {
+      score: 0,
+      breakdown: { typeScore: 0, quantityBonus: 0, chainBonus: 0 },
+      details: [],
+    };
+  }
+
+  evidences.forEach((e: any) => {
+    const typeWeight = evidenceTypeRiskScores[e.type] || 1;
+    const statusWeight = evidenceStatusRiskScores[e.status] || 1;
+    const itemScore = typeWeight * statusWeight / 2;
+    typeScore += itemScore;
+    if (e.type) evidenceTypes.add(e.type);
+    details.push(`证据「${e.name}」：${e.type}（+${itemScore.toFixed(1)}分）`);
+  });
+
+  typeScore = Math.round(typeScore * 10) / 10;
+
+  let quantityBonus = 0;
+  if (evidenceCount >= 10) {
+    quantityBonus = 8;
+    details.push(`证据数量充足（${evidenceCount}份，+8分）`);
+  } else if (evidenceCount >= 5) {
+    quantityBonus = 5;
+    details.push(`证据数量较多（${evidenceCount}份，+5分）`);
+  } else if (evidenceCount >= 3) {
+    quantityBonus = 2;
+    details.push(`证据数量中等（${evidenceCount}份，+2分）`);
+  }
+
+  let chainBonus = 0;
+  if (evidenceTypes.size >= 4) {
+    chainBonus = 5;
+    details.push(`证据链完整（${evidenceTypes.size}种类型，+5分）`);
+  } else if (evidenceTypes.size >= 2) {
+    chainBonus = 2;
+    details.push(`证据类型多样（${evidenceTypes.size}种类型，+2分）`);
+  }
+
+  const totalScore = Math.round(typeScore + quantityBonus + chainBonus);
+
+  return {
+    score: totalScore,
+    breakdown: {
+      typeScore: Math.round(typeScore),
+      quantityBonus,
+      chainBonus,
+    },
+    details,
+  };
+}
+
+function calculateRiskScore(person: any, evidences: any[] = []
+): {
   score: number;
   level: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   breakdown: {
@@ -57,11 +139,16 @@ function calculateRiskScore(person: any): {
     relationScore: number;
   };
   factors: string[];
+  evidenceDetails: {
+    breakdown: { typeScore: number; quantityBonus: number; chainBonus: number };
+    details: string[];
+  };
 } {
   const factors: string[] = [];
 
   const baseScore = personTypeRiskScores[person.personType] || 1;
   if (person.personType === '嫌疑人') factors.push('人员类型：嫌疑人（+8分）');
+  else if (person.personType === '关系人') factors.push('人员类型：关系人（+3分）');
 
   let caseScore = 0;
   const casePersons = person.casePersons || [];
@@ -76,7 +163,10 @@ function calculateRiskScore(person: any): {
       factors.push(`案件「${cp.case?.title}」：${caseType}（+${typeScore}分）`);
     }
   });
-  if (casePersons.length >= 3) {
+  if (casePersons.length >= 5) {
+    caseScore += 8;
+    factors.push(`多次涉案（共${casePersons.length}起，+8分）`);
+  } else if (casePersons.length >= 3) {
     caseScore += 5;
     factors.push(`多次涉案（共${casePersons.length}起，+5分）`);
   }
@@ -94,18 +184,19 @@ function calculateRiskScore(person: any): {
     clueScore += clueBaseScore;
     factors.push(`线索「${cp.clue?.title}」：重要性${importance}、可信度${credibility}（+${clueBaseScore}分）`);
   });
-  if (cluePersons.length >= 5) {
+  if (cluePersons.length >= 8) {
+    clueScore += 5;
+    factors.push(`多条线索关联（共${cluePersons.length}条，+5分）`);
+  } else if (cluePersons.length >= 5) {
     clueScore += 3;
     factors.push(`多条线索关联（共${cluePersons.length}条，+3分）`);
   }
 
-  let evidenceScore = 0;
-  const caseIds = casePersons.map((cp: any) => cp.caseId);
-  const clueIds = cluePersons.map((cp: any) => cp.clueId);
-  const directEvidences = person.evidences?.length || 0;
-  evidenceScore += directEvidences * 3;
-  if (directEvidences > 0) {
-    factors.push(`直接关联证据（${directEvidences}份，+${directEvidences * 3}分）`);
+  const evidenceResult = calculateEvidenceScore(evidences);
+  const evidenceScore = evidenceResult.score;
+  if (evidenceScore > 0) {
+    factors.push(`关联证据（共${evidences.length}份，合计+${evidenceScore}分）`);
+    factors.push(...evidenceResult.details.map(d => `  · ${d}`));
   }
 
   let relationScore = 0;
@@ -123,17 +214,20 @@ function calculateRiskScore(person: any): {
   if (suspectRelations.length > 0) {
     factors.push(`与${suspectRelations.length}名嫌疑人存在关联（+${suspectRelations.length * 2}分）`);
   }
-  if (relations.length >= 5) {
-    relationScore += 2;
-    factors.push(`复杂关系网络（共${relations.length}个关系，+2分）`);
+  if (relations.length >= 8) {
+    relationScore += 5;
+    factors.push(`复杂关系网络（共${relations.length}个关系，+5分）`);
+  } else if (relations.length >= 5) {
+    relationScore += 3;
+    factors.push(`复杂关系网络（共${relations.length}个关系，+3分）`);
   }
 
   const totalScore = baseScore + caseScore + clueScore + evidenceScore + relationScore;
 
   let level: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  if (totalScore >= 40) level = 'CRITICAL';
-  else if (totalScore >= 25) level = 'HIGH';
-  else if (totalScore >= 12) level = 'MEDIUM';
+  if (totalScore >= 50) level = 'CRITICAL';
+  else if (totalScore >= 30) level = 'HIGH';
+  else if (totalScore >= 15) level = 'MEDIUM';
   else level = 'LOW';
 
   return {
@@ -147,7 +241,34 @@ function calculateRiskScore(person: any): {
       relationScore,
     },
     factors,
+    evidenceDetails: {
+      breakdown: evidenceResult.breakdown,
+      details: evidenceResult.details,
+    },
   };
+}
+
+async function loadPersonWithEvidences(person: any) {
+  const caseIds = (person.casePersons || []).map((cp: any) => cp.caseId);
+  const clueIds = (person.cluePersons || []).map((cp: any) => cp.clueId);
+
+  let evidences: any[] = [];
+  if (caseIds.length > 0 || clueIds.length > 0) {
+    evidences = await prisma.evidence.findMany({
+      where: {
+        OR: [
+          ...(caseIds.length > 0 ? [{ caseId: { in: caseIds } }] : []),
+          ...(clueIds.length > 0 ? [{ clueId: { in: clueIds } }] : []),
+        ],
+      },
+      include: {
+        case: true,
+        clue: true,
+      },
+    });
+  }
+
+  return evidences;
 }
 
 export default async function (fastify: FastifyInstance) {
@@ -161,10 +282,65 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
-    const riskProfiles = persons.map((p: any) => ({
-      personId: p.id,
-      ...calculateRiskScore(p),
-    }));
+    const allCaseIds = new Set<string>();
+    const allClueIds = new Set<string>();
+    persons.forEach((p: any) => {
+      p.casePersons?.forEach((cp: any) => allCaseIds.add(cp.caseId));
+      p.cluePersons?.forEach((cp: any) => allClueIds.add(cp.clueId));
+    });
+
+    const allEvidences = await prisma.evidence.findMany({
+      where: {
+        OR: [
+          ...(allCaseIds.size > 0 ? [{ caseId: { in: Array.from(allCaseIds) } }] : []),
+          ...(allClueIds.size > 0 ? [{ clueId: { in: Array.from(allClueIds) } }] : []),
+        ],
+      },
+      include: { case: true, clue: true },
+    });
+
+    const evidenceByCase = new Map<string, any[]>();
+    const evidenceByClue = new Map<string, any[]>();
+    allEvidences.forEach((e: any) => {
+      if (e.caseId) {
+        if (!evidenceByCase.has(e.caseId)) evidenceByCase.set(e.caseId, []);
+        evidenceByCase.get(e.caseId)!.push(e);
+      }
+      if (e.clueId) {
+        if (!evidenceByClue.has(e.clueId)) evidenceByClue.set(e.clueId, []);
+        evidenceByClue.get(e.clueId)!.push(e);
+      }
+    });
+
+    const riskProfiles = persons.map((p: any) => {
+      const personEvidences: any[] = [];
+      const seenEvidenceIds = new Set<string>();
+
+      p.casePersons?.forEach((cp: any) => {
+        const caseEvidences = evidenceByCase.get(cp.caseId) || [];
+        caseEvidences.forEach(e => {
+          if (!seenEvidenceIds.has(e.id)) {
+            seenEvidenceIds.add(e.id);
+            personEvidences.push(e);
+          }
+        });
+      });
+      p.cluePersons?.forEach((cp: any) => {
+        const clueEvidences = evidenceByClue.get(cp.clueId) || [];
+        clueEvidences.forEach(e => {
+          if (!seenEvidenceIds.has(e.id)) {
+            seenEvidenceIds.add(e.id);
+            personEvidences.push(e);
+          }
+        });
+      });
+
+      return {
+        personId: p.id,
+        ...calculateRiskScore(p, personEvidences),
+        evidenceCount: personEvidences.length,
+      };
+    });
 
     const levelCounts: Record<string, number> = {
       CRITICAL: 0,
@@ -198,6 +374,7 @@ export default async function (fastify: FastifyInstance) {
           level: rp.level,
           caseCount: person?.casePersons?.length || 0,
           clueCount: person?.cluePersons?.length || 0,
+          evidenceCount: rp.evidenceCount,
         };
       });
 
@@ -248,8 +425,62 @@ export default async function (fastify: FastifyInstance) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const allCaseIds = new Set<string>();
+    const allClueIds = new Set<string>();
+    persons.forEach((p: any) => {
+      p.casePersons?.forEach((cp: any) => allCaseIds.add(cp.caseId));
+      p.cluePersons?.forEach((cp: any) => allClueIds.add(cp.clueId));
+    });
+
+    let allEvidences: any[] = [];
+    if (allCaseIds.size > 0 || allClueIds.size > 0) {
+      allEvidences = await prisma.evidence.findMany({
+        where: {
+          OR: [
+            ...(allCaseIds.size > 0 ? [{ caseId: { in: Array.from(allCaseIds) } }] : []),
+            ...(allClueIds.size > 0 ? [{ clueId: { in: Array.from(allClueIds) } }] : []),
+          ],
+        },
+      });
+    }
+
+    const evidenceByCase = new Map<string, any[]>();
+    const evidenceByClue = new Map<string, any[]>();
+    allEvidences.forEach((e: any) => {
+      if (e.caseId) {
+        if (!evidenceByCase.has(e.caseId)) evidenceByCase.set(e.caseId, []);
+        evidenceByCase.get(e.caseId)!.push(e);
+      }
+      if (e.clueId) {
+        if (!evidenceByClue.has(e.clueId)) evidenceByClue.set(e.clueId, []);
+        evidenceByClue.get(e.clueId)!.push(e);
+      }
+    });
+
     const enriched = persons.map((p: any) => {
-      const risk = calculateRiskScore(p);
+      const personEvidences: any[] = [];
+      const seenEvidenceIds = new Set<string>();
+
+      p.casePersons?.forEach((cp: any) => {
+        const caseEvidences = evidenceByCase.get(cp.caseId) || [];
+        caseEvidences.forEach(e => {
+          if (!seenEvidenceIds.has(e.id)) {
+            seenEvidenceIds.add(e.id);
+            personEvidences.push(e);
+          }
+        });
+      });
+      p.cluePersons?.forEach((cp: any) => {
+        const clueEvidences = evidenceByClue.get(cp.clueId) || [];
+        clueEvidences.forEach(e => {
+          if (!seenEvidenceIds.has(e.id)) {
+            seenEvidenceIds.add(e.id);
+            personEvidences.push(e);
+          }
+        });
+      });
+
+      const risk = calculateRiskScore(p, personEvidences);
       return {
         id: p.id,
         name: p.name,
@@ -265,6 +496,7 @@ export default async function (fastify: FastifyInstance) {
         tags: p.personTags.map((pt: any) => pt.tag),
         caseCount: p._count.casePersons,
         clueCount: p._count.cluePersons,
+        evidenceCount: personEvidences.length,
         riskScore: risk.score,
         riskLevel: risk.level,
         riskBreakdown: risk.breakdown,
@@ -287,6 +519,8 @@ export default async function (fastify: FastifyInstance) {
         comparison = a.caseCount - b.caseCount;
       } else if (sortBy === 'clues') {
         comparison = a.clueCount - b.clueCount;
+      } else if (sortBy === 'evidences') {
+        comparison = a.evidenceCount - b.evidenceCount;
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
@@ -325,8 +559,6 @@ export default async function (fastify: FastifyInstance) {
       reply.status(404).send({ error: '人员不存在' });
       return;
     }
-
-    const risk = calculateRiskScore(person);
 
     const caseIds = person.casePersons.map((cp: any) => cp.caseId);
     const clueIds = person.cluePersons.map((cp: any) => cp.clueId);
@@ -369,8 +601,6 @@ export default async function (fastify: FastifyInstance) {
           },
         });
 
-        const personMap = new Map(relatedPersons.map((p: any) => [p.id, p]));
-
         const nodes = relatedPersons.map((p: any) => ({
           id: p.id,
           name: p.name,
@@ -392,6 +622,8 @@ export default async function (fastify: FastifyInstance) {
         return { nodes, edges };
       })(),
     ]);
+
+    const risk = calculateRiskScore(person, relatedEvidences);
 
     const clueHits = person.cluePersons
       .filter((cp: any) =>
@@ -429,6 +661,7 @@ export default async function (fastify: FastifyInstance) {
       riskLevel: risk.level,
       riskBreakdown: risk.breakdown,
       riskFactors: risk.factors,
+      evidenceDetails: risk.evidenceDetails,
       cases: person.casePersons.map((cp: any) => ({
         id: cp.caseId,
         caseNumber: cp.case?.caseNumber,
@@ -470,6 +703,7 @@ export default async function (fastify: FastifyInstance) {
         location: e.location,
         createdAt: e.createdAt,
       })),
+      evidenceCount: relatedEvidences.length,
       relations: relationGraph,
     };
   });
@@ -490,12 +724,14 @@ export default async function (fastify: FastifyInstance) {
       return;
     }
 
-    const risk = calculateRiskScore(person);
+    const evidences = await loadPersonWithEvidences(person);
+    const risk = calculateRiskScore(person, evidences);
 
     return {
       personId: person.id,
       name: person.name,
       ...risk,
+      evidenceCount: evidences.length,
       calculatedAt: new Date().toISOString(),
     };
   });

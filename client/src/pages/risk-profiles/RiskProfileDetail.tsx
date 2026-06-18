@@ -165,7 +165,7 @@ export default function RiskProfileDetail() {
   }
 
   const riskConfig = riskLevelConfig[profileData.riskLevel] || riskLevelConfig.LOW;
-  const scorePercent = Math.min(100, Math.round((profileData.riskScore / 60) * 100));
+  const scorePercent = Math.min(100, Math.round((profileData.riskScore / 80) * 100));
   const breakdown = profileData.riskBreakdown || {};
   const totalBreakdown = Object.values(breakdown).reduce((sum: number, v: any) => sum + (v || 0), 0) || 1;
 
@@ -174,7 +174,7 @@ export default function RiskProfileDetail() {
     radar: {
       indicator: Object.entries(categoryLabels).map(([key, label]) => ({
         name: label,
-        max: 20,
+        max: 30,
       })),
       shape: 'polygon',
       splitNumber: 4,
