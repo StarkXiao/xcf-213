@@ -35,6 +35,10 @@ export const clueApi = {
   delete: (id: string) => api.delete(`/clues/${id}`),
   addPerson: (id: string, data: any) => api.post(`/clues/${id}/persons`, data),
   removePerson: (id: string, personId: string) => api.delete(`/clues/${id}/persons/${personId}`),
+  batchAssign: (data: { clueIds: string[]; caseId: string; handler?: string; status?: string }) => api.post('/clues/batch/assign', data),
+  batchReturn: (data: { clueIds: string[]; note?: string }) => api.post('/clues/batch/return', data),
+  batchMerge: (data: { clueIds: string[]; targetClueId: string; caseId?: string }) => api.post('/clues/batch/merge', data),
+  batchToEvidence: (data: { clueIds: string[]; caseId: string; evidenceType?: string }) => api.post('/clues/batch/to-evidence', data),
 };
 
 export const personApi = {
