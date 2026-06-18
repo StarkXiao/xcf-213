@@ -97,6 +97,8 @@ export const evidenceApi = {
 export const searchApi = {
   search: (params?: any) => api.get('/search', { params }),
   advancedSearch: (params?: any) => api.get('/search/advanced', { params }),
+  crossCaseDedupe: (params?: any) => api.get('/search/cross-case-dedupe', { params }),
+  createCase: (data: any) => api.post('/search/create-case', data),
   stats: () => api.get('/search/stats'),
   options: () => api.get('/search/options'),
 };

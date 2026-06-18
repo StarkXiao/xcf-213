@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Space, Tabs, Table, Tag, message, Row, Col, DatePicker, Collapse, Empty, Typography, Radio, Divider, List, Avatar, Tooltip } from 'antd';
-import { SearchOutlined, ReloadOutlined, FileTextOutlined, BulbOutlined, TeamOutlined, PaperClipOutlined, EnvironmentOutlined, PhoneOutlined, BarcodeOutlined, WarningOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Space, Tabs, Table, Tag, message, Row, Col, DatePicker, Collapse, Empty, Typography, Radio, Divider, List, Avatar, Tooltip, Modal, Descriptions, Statistic, Checkbox, Alert } from 'antd';
+import { SearchOutlined, ReloadOutlined, FileTextOutlined, BulbOutlined, TeamOutlined, PaperClipOutlined, EnvironmentOutlined, PhoneOutlined, BarcodeOutlined, WarningOutlined, FolderAddOutlined, FundProjectionScreenOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import type { ColumnsType } from 'antd/es/table';
@@ -24,6 +24,13 @@ export default function AdvancedSearch() {
   const [dedupeResults, setDedupeResults] = useState<any>({ persons: [], phones: [], locations: [], evidenceNumbers: [] });
   const [hasDeduped, setHasDeduped] = useState(false);
   const [dedupeActiveTab, setDedupeActiveTab] = useState('persons');
+  const [createCaseModal, setCreateCaseModal] = useState(false);
+  const [caseForm] = Form.useForm();
+  const [creating, setCreating] = useState(false);
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
+  const [selectedClueIds, setSelectedClueIds] = useState<string[]>([]);
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadOptions();
@@ -98,6 +105,35 @@ export default function AdvancedSearch() {
     dedupeForm.resetFields();
     setDedupeResults({ persons: [], phones: [], locations: [], evidenceNumbers: [] });
     setHasDeduped(false);
+  };
+
+  const openCreateCaseModal = () => {
+    setSelectedCaseIds(results.cases?.map((c: any) => c.id) || []);
+    setSelectedPersonIds(results.persons?.map((p: any) => p.id) || []);
+    setSelectedClueIds(results.clues?.map((c: any) => c.id) || []);
+    setSelectedEvidenceIds(results.evidences?.map((e: any) => e.id) || []);
+    caseForm.resetFields();
+    setCreateCaseModal(true);
+  };
+
+  const handleCreateCase = async (values: any) => {
+    setCreating(true);
+    try {
+      const res = await searchApi.createCase({
+        ...values,
+        caseIds: selectedCaseIds,
+        personIds: selectedPersonIds,
+        clueIds: selectedClueIds,
+        evidenceIds: selectedEvidenceIds,
+      });
+      message.success('专案创建成功');
+      setCreateCaseModal(false);
+      navigate(`/cases/${res.data.id}`);
+    } catch (error) {
+      message.error('专案创建失败');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const getPersonTypeColor = (type: string) => {
@@ -1236,10 +1272,22 @@ export default function AdvancedSearch() {
           {hasSearched ? (
             totalCount > 0 ? (
               <Card className="card-shadow">
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Title level={5} style={{ margin: 0 }}>
                     搜索结果 <Text type="secondary" style={{ fontSize: 14, fontWeight: 'normal' }}>（共 {totalCount} 条）</Text>
                   </Title>
+                  <Button
+                    type="primary"
+                    icon={<FolderAddOutlined />}
+                    onClick={openCreateCaseModal}
+                    style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      border: 'none',
+                      boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)',
+                    }}
+                  >
+                    一键建专案
+                  </Button>
                 </div>
                 <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
               </Card>
@@ -1292,6 +1340,319 @@ export default function AdvancedSearch() {
           )}
         </>
       )}
+
+      <Modal
+        title={
+          <Space>
+            <FundProjectionScreenOutlined style={{ color: '#667eea' }} />
+            <span>一键建专案 — 汇总专题视图</span>
+          </Space>
+        }
+        open={createCaseModal}
+        onCancel={() => setCreateCaseModal(false)}
+        width={900}
+        footer={null}
+        destroyOnClose
+      >
+        <Alert
+          type="info"
+          showIcon
+          message="将搜索结果中命中的案件、人员、线索、证据汇总为一个专案，形成专题视图"
+          style={{ marginBottom: 16 }}
+        />
+
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={6}>
+            <Card size="small" style={{ textAlign: 'center', background: '#f0f5ff' }}>
+              <Statistic
+                title="关联案件"
+                value={selectedCaseIds.length}
+                suffix="个"
+                prefix={<FileTextOutlined style={{ color: '#1677ff' }} />}
+                valueStyle={{ color: '#1677ff', fontSize: 24 }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card size="small" style={{ textAlign: 'center', background: '#f6ffed' }}>
+              <Statistic
+                title="涉案人员"
+                value={selectedPersonIds.length}
+                suffix="人"
+                prefix={<TeamOutlined style={{ color: '#52c41a' }} />}
+                valueStyle={{ color: '#52c41a', fontSize: 24 }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card size="small" style={{ textAlign: 'center', background: '#fff7e6' }}>
+              <Statistic
+                title="关联线索"
+                value={selectedClueIds.length}
+                suffix="条"
+                prefix={<BulbOutlined style={{ color: '#fa8c16' }} />}
+                valueStyle={{ color: '#fa8c16', fontSize: 24 }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card size="small" style={{ textAlign: 'center', background: '#f9f0ff' }}>
+              <Statistic
+                title="关联证据"
+                value={selectedEvidenceIds.length}
+                suffix="份"
+                prefix={<PaperClipOutlined style={{ color: '#722ed1' }} />}
+                valueStyle={{ color: '#722ed1', fontSize: 24 }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        <Collapse
+          defaultActiveKey={['cases', 'persons', 'clues', 'evidences']}
+          style={{ marginBottom: 16 }}
+          items={[
+            {
+              key: 'cases',
+              label: (
+                <Space>
+                  <Checkbox
+                    checked={selectedCaseIds.length === (results.cases?.length || 0) && (results.cases?.length || 0) > 0}
+                    indeterminate={selectedCaseIds.length > 0 && selectedCaseIds.length < (results.cases?.length || 0)}
+                    onChange={(e) => {
+                      setSelectedCaseIds(e.target.checked ? (results.cases?.map((c: any) => c.id) || []) : []);
+                    }}
+                  />
+                  <FileTextOutlined style={{ color: '#1677ff' }} />
+                  <span>关联案件</span>
+                  <Tag color="blue">{selectedCaseIds.length}/{results.cases?.length || 0}</Tag>
+                </Space>
+              ),
+              children: (
+                <List
+                  size="small"
+                  dataSource={results.cases}
+                  renderItem={(item: any) => (
+                    <List.Item style={{ padding: '6px 0' }}>
+                      <Space>
+                        <Checkbox
+                          checked={selectedCaseIds.includes(item.id)}
+                          onChange={(e) => {
+                            setSelectedCaseIds(e.target.checked
+                              ? [...selectedCaseIds, item.id]
+                              : selectedCaseIds.filter(id => id !== item.id));
+                          }}
+                        />
+                        <Tag color="blue" style={{ fontFamily: 'monospace' }}>{item.caseNumber}</Tag>
+                        <span>{item.title}</span>
+                        <Tag>{item.caseType}</Tag>
+                        <Tag color={item.status === '已结案' ? 'green' : item.status === '侦查中' ? 'orange' : 'blue'}>{item.status}</Tag>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ),
+            },
+            {
+              key: 'persons',
+              label: (
+                <Space>
+                  <Checkbox
+                    checked={selectedPersonIds.length === (results.persons?.length || 0) && (results.persons?.length || 0) > 0}
+                    indeterminate={selectedPersonIds.length > 0 && selectedPersonIds.length < (results.persons?.length || 0)}
+                    onChange={(e) => {
+                      setSelectedPersonIds(e.target.checked ? (results.persons?.map((p: any) => p.id) || []) : []);
+                    }}
+                  />
+                  <TeamOutlined style={{ color: '#52c41a' }} />
+                  <span>涉案人员</span>
+                  <Tag color="green">{selectedPersonIds.length}/{results.persons?.length || 0}</Tag>
+                </Space>
+              ),
+              children: (
+                <List
+                  size="small"
+                  dataSource={results.persons}
+                  renderItem={(item: any) => (
+                    <List.Item style={{ padding: '6px 0' }}>
+                      <Space>
+                        <Checkbox
+                          checked={selectedPersonIds.includes(item.id)}
+                          onChange={(e) => {
+                            setSelectedPersonIds(e.target.checked
+                              ? [...selectedPersonIds, item.id]
+                              : selectedPersonIds.filter(id => id !== item.id));
+                          }}
+                        />
+                        <Avatar size="small" style={{ backgroundColor: item.personType === '嫌疑人' ? '#ff4d4f' : item.personType === '受害人' ? '#faad14' : '#52c41a' }}>
+                          {item.name?.charAt(0)}
+                        </Avatar>
+                        <span>{item.name}</span>
+                        <Tag color={getPersonTypeColor(item.personType)}>{item.personType}</Tag>
+                        {item.idCard && <Text style={{ fontFamily: 'monospace', fontSize: 12, color: '#999' }}>{item.idCard}</Text>}
+                        {item.phone && <Text style={{ fontSize: 12, color: '#999' }}>{item.phone}</Text>}
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ),
+            },
+            {
+              key: 'clues',
+              label: (
+                <Space>
+                  <Checkbox
+                    checked={selectedClueIds.length === (results.clues?.length || 0) && (results.clues?.length || 0) > 0}
+                    indeterminate={selectedClueIds.length > 0 && selectedClueIds.length < (results.clues?.length || 0)}
+                    onChange={(e) => {
+                      setSelectedClueIds(e.target.checked ? (results.clues?.map((c: any) => c.id) || []) : []);
+                    }}
+                  />
+                  <BulbOutlined style={{ color: '#fa8c16' }} />
+                  <span>关联线索</span>
+                  <Tag color="orange">{selectedClueIds.length}/{results.clues?.length || 0}</Tag>
+                </Space>
+              ),
+              children: (
+                <List
+                  size="small"
+                  dataSource={results.clues}
+                  renderItem={(item: any) => (
+                    <List.Item style={{ padding: '6px 0' }}>
+                      <Space>
+                        <Checkbox
+                          checked={selectedClueIds.includes(item.id)}
+                          onChange={(e) => {
+                            setSelectedClueIds(e.target.checked
+                              ? [...selectedClueIds, item.id]
+                              : selectedClueIds.filter(id => id !== item.id));
+                          }}
+                        />
+                        <Tag color="orange" style={{ fontFamily: 'monospace' }}>{item.clueNumber}</Tag>
+                        <span>{item.title}</span>
+                        <Tag color="orange">{item.clueType}</Tag>
+                        {item.credibility && <Tag color={item.credibility === '高' ? 'green' : 'blue'}>可信度: {item.credibility}</Tag>}
+                        {item.case && <Tag color="blue">来自: {item.case.caseNumber}</Tag>}
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ),
+            },
+            {
+              key: 'evidences',
+              label: (
+                <Space>
+                  <Checkbox
+                    checked={selectedEvidenceIds.length === (results.evidences?.length || 0) && (results.evidences?.length || 0) > 0}
+                    indeterminate={selectedEvidenceIds.length > 0 && selectedEvidenceIds.length < (results.evidences?.length || 0)}
+                    onChange={(e) => {
+                      setSelectedEvidenceIds(e.target.checked ? (results.evidences?.map((e: any) => e.id) || []) : []);
+                    }}
+                  />
+                  <PaperClipOutlined style={{ color: '#722ed1' }} />
+                  <span>关联证据</span>
+                  <Tag color="purple">{selectedEvidenceIds.length}/{results.evidences?.length || 0}</Tag>
+                </Space>
+              ),
+              children: (
+                <List
+                  size="small"
+                  dataSource={results.evidences}
+                  renderItem={(item: any) => (
+                    <List.Item style={{ padding: '6px 0' }}>
+                      <Space>
+                        <Checkbox
+                          checked={selectedEvidenceIds.includes(item.id)}
+                          onChange={(e) => {
+                            setSelectedEvidenceIds(e.target.checked
+                              ? [...selectedEvidenceIds, item.id]
+                              : selectedEvidenceIds.filter(id => id !== item.id));
+                          }}
+                        />
+                        <Tag color="purple" style={{ fontFamily: 'monospace' }}>{item.evidenceNumber}</Tag>
+                        <span>{item.name}</span>
+                        <Tag color="purple">{item.evidenceType || item.type}</Tag>
+                        {item.case && <Tag color="blue">来自: {item.case.caseNumber}</Tag>}
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ),
+            },
+          ]}
+        />
+
+        <Card size="small" title="专案基本信息" style={{ marginBottom: 16 }}>
+          <Form form={caseForm} layout="vertical" onFinish={handleCreateCase} initialValues={{
+            caseType: '专案',
+            priority: '高',
+            status: '已立案',
+          }}>
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item name="title" label="专案标题" rules={[{ required: true, message: '请输入专案标题' }]}>
+                  <Input placeholder="请输入专案标题" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="caseType" label="案件类型">
+                  <Select
+                    options={[
+                      { label: '专案', value: '专案' },
+                      ...((options.caseTypes || []) as string[]).map((t: string) => ({ label: t, value: t })),
+                    ].filter((v, i, a) => a.findIndex(x => x.value === v.value) === i)}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="priority" label="优先级">
+                  <Select
+                    options={(options.priorities || ['特急', '紧急', '高', '中', '低'] as string[]).map((t: string) => ({ label: t, value: t }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="caseManager" label="主办人">
+                  <Input placeholder="请输入主办人" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="department" label="所属部门">
+                  <Select
+                    placeholder="选择部门"
+                    allowClear
+                    options={(options.departments || []).map((t: string) => ({ label: t, value: t }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item name="description" label="专案描述">
+                  <Input.TextArea rows={3} placeholder="选填，默认自动生成描述" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <div style={{ textAlign: 'right' }}>
+              <Space>
+                <Button onClick={() => setCreateCaseModal(false)}>取消</Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={creating}
+                  icon={<CheckCircleOutlined />}
+                  disabled={selectedCaseIds.length + selectedPersonIds.length + selectedClueIds.length + selectedEvidenceIds.length === 0}
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                  }}
+                >
+                  确认创建专案
+                </Button>
+              </Space>
+            </div>
+          </Form>
+        </Card>
+      </Modal>
     </div>
   );
 }

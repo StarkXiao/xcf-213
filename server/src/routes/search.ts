@@ -682,9 +682,110 @@ export default async function (fastify: FastifyInstance) {
     return result;
   });
 
+  fastify.post('/create-case', async (request: FastifyRequest<{
+    Body: {
+      title: string;
+      description?: string;
+      caseType?: string;
+      caseManager?: string;
+      department?: string;
+      priority?: string;
+      caseIds?: string[];
+      personIds?: string[];
+      clueIds?: string[];
+      evidenceIds?: string[];
+    };
+  }>, reply) => {
+    const {
+      title,
+      description,
+      caseType,
+      caseManager,
+      department,
+      priority,
+      caseIds = [],
+      personIds = [],
+      clueIds = [],
+      evidenceIds = [],
+    } = request.body;
+
+    const count = await prisma.case.count();
+    const caseNumber = `ZA${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+
+    const caseItem = await prisma.case.create({
+      data: {
+        caseNumber,
+        title,
+        description: description || `由搜索结果一键创建的专案，汇总案件 ${caseIds.length} 个、人员 ${personIds.length} 人、线索 ${clueIds.length} 条、证据 ${evidenceIds.length} 份`,
+        caseType: caseType || '专案',
+        status: '已立案',
+        priority: priority || '高',
+        caseManager,
+        department,
+      },
+    });
+
+    if (personIds.length > 0) {
+      const existingCasePersons = await prisma.casePerson.findMany({
+        where: { caseId: caseItem.id, personId: { in: personIds } },
+        select: { personId: true },
+      });
+      const existingPersonIds = new Set(existingCasePersons.map(cp => cp.personId));
+      const newPersonIds = personIds.filter(id => !existingPersonIds.has(id));
+
+      if (newPersonIds.length > 0) {
+        await prisma.casePerson.createMany({
+          data: newPersonIds.map(personId => ({
+            caseId: caseItem.id,
+            personId,
+            role: '待分配',
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    if (clueIds.length > 0) {
+      const unassignedClues = await prisma.clue.findMany({
+        where: { id: { in: clueIds }, caseId: null },
+        select: { id: true },
+      });
+      if (unassignedClues.length > 0) {
+        await prisma.clue.updateMany({
+          where: { id: { in: unassignedClues.map(c => c.id) } },
+          data: { caseId: caseItem.id },
+        });
+      }
+    }
+
+    if (evidenceIds.length > 0) {
+      const unassignedEvidences = await prisma.evidence.findMany({
+        where: { id: { in: evidenceIds }, caseId: null },
+        select: { id: true },
+      });
+      if (unassignedEvidences.length > 0) {
+        await prisma.evidence.updateMany({
+          where: { id: { in: unassignedEvidences.map(e => e.id) } },
+          data: { caseId: caseItem.id },
+        });
+      }
+    }
+
+    const result = await prisma.case.findUnique({
+      where: { id: caseItem.id },
+      include: {
+        clues: true,
+        evidences: true,
+        casePersons: { include: { person: true } },
+      },
+    });
+
+    return result;
+  });
+
   fastify.get('/options', async () => {
     return {
-      caseTypes: ['刑事案件', '治安案件', '经济案件', '毒品案件', '网络犯罪', '其他'],
+      caseTypes: ['专案', '刑事案件', '治安案件', '经济案件', '毒品案件', '网络犯罪', '其他'],
       caseStatuses: ['待立案', '已立案', '侦查中', '已移送起诉', '已判决', '已结案', '已撤销'],
       priorities: ['特急', '紧急', '高', '中', '低'],
       clueTypes: ['物证线索', '人证线索', '书证线索', '电子数据', '视频监控', '通讯记录', '其他'],
