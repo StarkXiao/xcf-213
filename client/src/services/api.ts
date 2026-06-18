@@ -133,4 +133,27 @@ export const operationLogApi = {
     api.get(`/operation-logs/target/${targetType}/${targetId}`, { params }),
 };
 
+export const commandApi = {
+  getDashboardOverview: () => api.get('/command/dashboard/overview'),
+  listTasks: (params?: any) => api.get('/command/tasks', { params }),
+  getTaskStats: () => api.get('/command/tasks/stats'),
+  getTaskWarnings: () => api.get('/command/tasks/warnings'),
+  getTask: (id: string) => api.get(`/command/tasks/${id}`),
+  createTask: (data: any) => api.post('/command/tasks', data),
+  updateTask: (id: string, data: any) => api.put(`/command/tasks/${id}`, data),
+  deleteTask: (id: string) => api.delete(`/command/tasks/${id}`),
+  assignTask: (id: string, data: any) => api.post(`/command/tasks/${id}/assign`, data),
+  transferTask: (id: string, data: any) => api.post(`/command/tasks/${id}/transfer`, data),
+  completeTask: (id: string, data?: any) => api.post(`/command/tasks/${id}/complete`, data),
+  cancelTask: (id: string, data?: any) => api.post(`/command/tasks/${id}/cancel`, data),
+  listTaskProgresses: (id: string) => api.get(`/command/tasks/${id}/progresses`),
+  addTaskProgress: (id: string, data: any) => api.post(`/command/tasks/${id}/progresses`, data),
+  listFlows: (params?: any) => api.get('/command/flows', { params }),
+  getFlowStats: () => api.get('/command/flows/stats'),
+  createFlow: (data: any) => api.post('/command/flows', data),
+  getFlowsBySource: (sourceType: string, sourceId: string) =>
+    api.get(`/command/flows/${sourceType}/${sourceId}`),
+  checkOverdue: () => api.get('/command/check-overdue'),
+};
+
 export default api;
