@@ -17,6 +17,7 @@ import EvidenceDetail from './pages/evidences/EvidenceDetail';
 import EvidenceUpload from './pages/evidences/EvidenceUpload';
 import AdvancedSearch from './pages/search/AdvancedSearch';
 import OperationLogList from './pages/logs/OperationLogList';
+import CrossCaseAnalysis from './pages/analysis/CrossCaseAnalysis';
 
 const { Content } = Layout;
 
@@ -51,6 +52,8 @@ function App() {
             <Route path="/evidences/:id" element={<EvidenceDetail />} />
 
             <Route path="/search" element={<AdvancedSearch />} />
+
+            <Route path="/analysis" element={<CrossCaseAnalysis />} />
 
             <Route path="/operation-logs" element={<OperationLogList />} />
 

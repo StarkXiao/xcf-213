@@ -156,4 +156,18 @@ export const commandApi = {
   checkOverdue: () => api.get('/command/check-overdue'),
 };
 
+export const analysisApi = {
+  getOverview: () => api.get('/analysis/overview'),
+  getCrossCaseAnalysis: (params?: {
+    dimensions?: string[];
+    minCaseCount?: number;
+    startDate?: string;
+    endDate?: string;
+    caseTypes?: string[];
+    caseStatuses?: string[];
+  }) => api.get('/analysis/cross-case', { params }),
+  getCaseGroups: (params?: { minCaseCount?: number }) => api.get('/analysis/case-groups', { params }),
+  getCaseCluster: (caseId: string) => api.get(`/analysis/case-cluster/${caseId}`),
+};
+
 export default api;

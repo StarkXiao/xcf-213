@@ -9,6 +9,7 @@ import {
   PaperClipOutlined,
   FilterOutlined,
   HistoryOutlined,
+  ClusterOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -18,6 +19,11 @@ const menuItems = [
     key: '/dashboard',
     icon: <DashboardOutlined />,
     label: '工作台',
+  },
+  {
+    key: '/analysis',
+    icon: <ClusterOutlined />,
+    label: '跨案串并分析',
   },
   {
     key: '/cases',

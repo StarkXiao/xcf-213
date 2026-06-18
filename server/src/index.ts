@@ -13,6 +13,7 @@ import evidenceRoutes from './routes/evidences';
 import searchRoutes from './routes/search';
 import operationLogRoutes from './routes/operationLogs';
 import commandRoutes from './routes/command';
+import analysisRoutes from './routes/analysis';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -53,6 +54,7 @@ server.register(evidenceRoutes, { prefix: '/api/evidences' });
 server.register(searchRoutes, { prefix: '/api/search' });
 server.register(operationLogRoutes, { prefix: '/api/operation-logs' });
 server.register(commandRoutes, { prefix: '/api/command' });
+server.register(analysisRoutes, { prefix: '/api/analysis' });
 
 const start = async () => {
   try {
