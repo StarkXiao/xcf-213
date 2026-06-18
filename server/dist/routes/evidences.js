@@ -1,0 +1,936 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = default_1;
+const prisma_1 = __importDefault(require("../lib/prisma"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const uuid_1 = require("uuid");
+const crypto_1 = __importDefault(require("crypto"));
+const operationLog_1 = require("../lib/operationLog");
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+if (!fs_1.default.existsSync(UPLOAD_DIR)) {
+    fs_1.default.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+async function default_1(fastify) {
+    const getFileType = (mimeType, fileName) => {
+        if (!mimeType && !fileName)
+            return 'other';
+        const mime = mimeType || '';
+        const name = fileName || '';
+        if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(name))
+            return 'image';
+        if (mime.startsWith('video/') || /\.(mp4|avi|mov|mkv|flv|wmv)$/i.test(name))
+            return 'video';
+        if (mime.startsWith('audio/') || /\.(mp3|wav|flac|aac|ogg)$/i.test(name))
+            return 'audio';
+        if (/\.(doc|docx|pdf|txt|xls|xlsx|ppt|pptx)$/i.test(name) || mime.includes('pdf') || mime.includes('msword') || mime.includes('spreadsheet'))
+            return 'document';
+        if (/\.(zip|rar|7z|tar|gz)$/i.test(name))
+            return 'archive';
+        return 'other';
+    };
+    const inferEvidenceType = (mimeType, fileName) => {
+        const fileType = getFileType(mimeType, fileName);
+        const name = (fileName || '').toLowerCase();
+        if (fileType === 'image') {
+            if (/(现场|勘查|勘验|scene|site|survey)/i.test(name))
+                return '勘验笔录';
+            if (/(伤情|鉴定|伤势|injury|identify)/i.test(name))
+                return '鉴定意见';
+            if (/(证件|身份|身份证|id|card)/i.test(name))
+                return '书证';
+            return '物证';
+        }
+        if (fileType === 'video') {
+            if (/(监控|录像|surveillance|camera)/i.test(name))
+                return '视听资料';
+            if (/(讯问|询问|笔录|interrogate|inquiry)/i.test(name))
+                return '视听资料';
+            return '视听资料';
+        }
+        if (fileType === 'audio') {
+            if (/(讯问|询问|通话|录音|interrogate|inquiry|record)/i.test(name))
+                return '犯罪嫌疑人供述';
+            if (/(证人|证言|witness|testimony)/i.test(name))
+                return '证人证言';
+            if (/(被害人|受害者|victim)/i.test(name))
+                return '被害人陈述';
+            return '视听资料';
+        }
+        if (fileType === 'document') {
+            if (/(鉴定|意见书|报告|identify|report)/i.test(name))
+                return '鉴定意见';
+            if (/(勘验|笔录|现场勘查|inspection|survey)/i.test(name))
+                return '勘验笔录';
+            if (/(证人|证言|witness)/i.test(name))
+                return '证人证言';
+            if (/(供述|陈述|讯问|询问)/i.test(name)) {
+                if (/(被害人|受害者|victim)/i.test(name))
+                    return '被害人陈述';
+                return '犯罪嫌疑人供述';
+            }
+            if (/(合同|协议|借条|收据|发票|单据|证明|contract|receipt|invoice)/i.test(name))
+                return '书证';
+            return '书证';
+        }
+        if (fileType === 'archive') {
+            if (/(电子|数据|聊天|日志|email|邮件|聊天记录|log)/i.test(name))
+                return '电子数据';
+            return '其他';
+        }
+        if (/\.(db|sql|bak|log|eml|msg)$/i.test(name) || /(聊天|记录|日志|数据库|邮件|email|电子|数据)/i.test(name)) {
+            return '电子数据';
+        }
+        return '物证';
+    };
+    const inferCollectionMethod = (mimeType, fileName) => {
+        const fileType = getFileType(mimeType, fileName);
+        const name = (fileName || '').toLowerCase();
+        if (/(扣押|seizure|seize)/i.test(name))
+            return '扣押';
+        if (/(提取|extract)/i.test(name))
+            return '提取';
+        if (/(调取|调取证据|obtain)/i.test(name))
+            return '调取证据';
+        if (/(搜查|search)/i.test(name))
+            return '搜查';
+        if (/(勘验|勘查|inspection|survey)/i.test(name))
+            return '现场勘查';
+        if (/(鉴定|identify)/i.test(name))
+            return '鉴定';
+        if (/(扣押|seizure|seize)/i.test(name))
+            return '扣押';
+        if (fileType === 'image') {
+            if (/(现场|scene|site)/i.test(name))
+                return '现场勘查';
+            return '拍照固定';
+        }
+        if (fileType === 'video' || fileType === 'audio')
+            return '录音录像';
+        if (fileType === 'document')
+            return '调取证据';
+        if (fileType === 'archive')
+            return '电子数据提取';
+        return '扣押';
+    };
+    const generateEvidenceNumber = async () => {
+        const count = await prisma_1.default.evidence.count();
+        return `ZJ${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+    };
+    const generateBatchNumber = async () => {
+        const count = await prisma_1.default.evidenceBatch.count();
+        return `PC${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+    };
+    const computeFileHash = (filePath) => {
+        return new Promise((resolve, reject) => {
+            const hash = crypto_1.default.createHash('sha256');
+            const stream = fs_1.default.createReadStream(filePath);
+            stream.on('data', (data) => hash.update(data));
+            stream.on('end', () => resolve(hash.digest('hex')));
+            stream.on('error', reject);
+        });
+    };
+    const transformEvidence = (evidence) => ({
+        ...evidence,
+        evidenceType: evidence.type,
+        fileType: getFileType(evidence.mimeType, evidence.fileName),
+        fileUrl: evidence.filePath,
+        originalName: evidence.fileName,
+        collectionTime: evidence.collectTime,
+    });
+    fastify.get('/', async (request, reply) => {
+        const { page = 1, pageSize = 10, keyword, evidenceType, fileType, status, caseId, clueId, batchId } = request.query;
+        const skip = (page - 1) * pageSize;
+        const where = {};
+        if (keyword) {
+            where.OR = [
+                { name: { contains: keyword, mode: 'insensitive' } },
+                { evidenceNumber: { contains: keyword, mode: 'insensitive' } },
+                { description: { contains: keyword, mode: 'insensitive' } },
+            ];
+        }
+        if (evidenceType)
+            where.type = evidenceType;
+        if (status)
+            where.status = status;
+        if (caseId)
+            where.caseId = caseId;
+        if (clueId)
+            where.clueId = clueId;
+        if (batchId)
+            where.batchId = batchId;
+        const [items, total] = await Promise.all([
+            prisma_1.default.evidence.findMany({
+                where,
+                skip,
+                take: pageSize,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    case: { select: { id: true, caseNumber: true, title: true } },
+                    clue: { select: { id: true, clueNumber: true, title: true } },
+                },
+            }),
+            prisma_1.default.evidence.count({ where }),
+        ]);
+        const transformedItems = items.map(item => transformEvidence(item));
+        if (fileType) {
+            const filtered = transformedItems.filter(item => item.fileType === fileType);
+            return { items: filtered, total: filtered.length, page, pageSize };
+        }
+        return { items: transformedItems, total, page, pageSize };
+    });
+    fastify.get('/cases', async () => {
+        return prisma_1.default.case.findMany({
+            select: { id: true, caseNumber: true, title: true },
+            orderBy: { createdAt: 'desc' },
+        });
+    });
+    fastify.get('/cases/:caseId/clues', async (request) => {
+        return prisma_1.default.clue.findMany({
+            where: { caseId: request.params.caseId },
+            select: { id: true, clueNumber: true, title: true },
+            orderBy: { createdAt: 'desc' },
+        });
+    });
+    fastify.get('/:id', async (request, reply) => {
+        const evidence = await prisma_1.default.evidence.findUnique({
+            where: { id: request.params.id },
+            include: {
+                case: { select: { id: true, caseNumber: true, title: true } },
+                clue: { select: { id: true, clueNumber: true, title: true } },
+            },
+        });
+        if (!evidence) {
+            reply.status(404).send({ error: '证据不存在' });
+            return;
+        }
+        return transformEvidence(evidence);
+    });
+    fastify.post('/', async (request, reply) => {
+        const data = request.body;
+        const count = await prisma_1.default.evidence.count();
+        const evidenceNumber = `ZJ${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+        const evidence = await prisma_1.default.evidence.create({
+            data: {
+                ...data,
+                evidenceNumber,
+                collectionMethod: data.collectionMethod,
+                collectTime: data.collectionTime ? new Date(data.collectionTime) : data.collectTime ? new Date(data.collectTime) : null,
+            },
+        });
+        await (0, operationLog_1.logCreate)(operationLog_1.TargetType.EVIDENCE, evidence.id, `创建证据：${evidenceNumber} - ${evidence.name}`, request, evidence.collector, {
+            id: evidence.id,
+            evidenceNumber: evidence.evidenceNumber,
+            name: evidence.name,
+            type: evidence.type,
+            status: evidence.status,
+            collector: evidence.collector,
+            caseId: evidence.caseId,
+            clueId: evidence.clueId,
+        });
+        if (evidence.caseId) {
+            await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CASE, evidence.caseId, `新增关联证据：${evidenceNumber} - ${evidence.name}`, request, {
+                evidenceId: evidence.id,
+                evidenceNumber: evidence.evidenceNumber,
+                evidenceName: evidence.name,
+            });
+        }
+        if (evidence.clueId) {
+            await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CLUE, evidence.clueId, `新增关联证据：${evidenceNumber} - ${evidence.name}`, request, {
+                evidenceId: evidence.id,
+                evidenceNumber: evidence.evidenceNumber,
+                evidenceName: evidence.name,
+            });
+        }
+        return transformEvidence(evidence);
+    });
+    fastify.post('/upload', async (request, reply) => {
+        const parts = request.parts();
+        const result = {};
+        for await (const part of parts) {
+            if (part.type === 'file') {
+                const fileId = (0, uuid_1.v4)();
+                const ext = path_1.default.extname(part.filename);
+                const fileName = `${fileId}${ext}`;
+                const filePath = path_1.default.join(UPLOAD_DIR, fileName);
+                const fileStream = fs_1.default.createWriteStream(filePath);
+                let fileSize = 0;
+                for await (const chunk of part.file) {
+                    fileSize += chunk.length;
+                    fileStream.write(chunk);
+                }
+                fileStream.end();
+                result.fileName = part.filename;
+                result.storedName = fileName;
+                result.filePath = `/uploads/${fileName}`;
+                result.fileSize = fileSize;
+                result.mimeType = part.mimetype;
+            }
+            else {
+                result[part.fieldname] = part.value;
+            }
+        }
+        const count = await prisma_1.default.evidence.count();
+        const evidenceNumber = `ZJ${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+        const evidence = await prisma_1.default.evidence.create({
+            data: {
+                evidenceNumber,
+                name: result.name || result.fileName,
+                description: result.description,
+                type: result.evidenceType || result.type || '其他',
+                filePath: result.filePath,
+                fileName: result.fileName,
+                fileSize: result.fileSize,
+                mimeType: result.mimeType,
+                caseId: result.caseId,
+                clueId: result.clueId,
+                collectionMethod: result.collectionMethod,
+                collector: result.collector,
+                collectTime: result.collectionTime ? new Date(result.collectionTime) : result.collectTime ? new Date(result.collectTime) : null,
+                location: result.location,
+                status: result.status || '已入库',
+                note: result.note,
+            },
+        });
+        await (0, operationLog_1.logCreate)(operationLog_1.TargetType.EVIDENCE, evidence.id, `上传证据：${evidenceNumber} - ${evidence.name}`, request, result.collector, {
+            id: evidence.id,
+            evidenceNumber: evidence.evidenceNumber,
+            name: evidence.name,
+            type: evidence.type,
+            status: evidence.status,
+            fileSize: evidence.fileSize,
+            mimeType: evidence.mimeType,
+            caseId: evidence.caseId,
+            clueId: evidence.clueId,
+        });
+        if (evidence.caseId) {
+            await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CASE, evidence.caseId, `新增关联证据：${evidenceNumber} - ${evidence.name}`, request, {
+                evidenceId: evidence.id,
+                evidenceNumber: evidence.evidenceNumber,
+                evidenceName: evidence.name,
+            });
+        }
+        if (evidence.clueId) {
+            await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CLUE, evidence.clueId, `新增关联证据：${evidenceNumber} - ${evidence.name}`, request, {
+                evidenceId: evidence.id,
+                evidenceNumber: evidence.evidenceNumber,
+                evidenceName: evidence.name,
+            });
+        }
+        return transformEvidence(evidence);
+    });
+    fastify.put('/:id', async (request, reply) => {
+        const data = request.body;
+        try {
+            const beforeEvidence = await prisma_1.default.evidence.findUnique({
+                where: { id: request.params.id },
+            });
+            const evidence = await prisma_1.default.evidence.update({
+                where: { id: request.params.id },
+                data: {
+                    ...data,
+                    collectTime: data.collectionTime ? new Date(data.collectionTime) : data.collectTime ? new Date(data.collectTime) : undefined,
+                },
+            });
+            await (0, operationLog_1.logUpdate)(operationLog_1.TargetType.EVIDENCE, evidence.id, `更新证据：${evidence.evidenceNumber} - ${evidence.name}`, request, {
+                name: beforeEvidence?.name,
+                type: beforeEvidence?.type,
+                status: beforeEvidence?.status,
+                description: beforeEvidence?.description,
+                collector: beforeEvidence?.collector,
+                caseId: beforeEvidence?.caseId,
+                clueId: beforeEvidence?.clueId,
+                location: beforeEvidence?.location,
+            }, {
+                name: evidence.name,
+                type: evidence.type,
+                status: evidence.status,
+                description: evidence.description,
+                collector: evidence.collector,
+                caseId: evidence.caseId,
+                clueId: evidence.clueId,
+                location: evidence.location,
+            }, evidence.collector);
+            if (beforeEvidence?.caseId !== evidence.caseId) {
+                if (beforeEvidence?.caseId) {
+                    await (0, operationLog_1.logDisassociate)(operationLog_1.TargetType.CASE, beforeEvidence.caseId, `移除关联证据：${beforeEvidence.evidenceNumber} - ${beforeEvidence.name}`, request, {
+                        evidenceId: evidence.id,
+                        evidenceNumber: evidence.evidenceNumber,
+                        evidenceName: evidence.name,
+                    });
+                }
+                if (evidence.caseId) {
+                    await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CASE, evidence.caseId, `新增关联证据：${evidence.evidenceNumber} - ${evidence.name}`, request, {
+                        evidenceId: evidence.id,
+                        evidenceNumber: evidence.evidenceNumber,
+                        evidenceName: evidence.name,
+                    });
+                }
+            }
+            if (beforeEvidence?.clueId !== evidence.clueId) {
+                if (beforeEvidence?.clueId) {
+                    await (0, operationLog_1.logDisassociate)(operationLog_1.TargetType.CLUE, beforeEvidence.clueId, `移除关联证据：${beforeEvidence.evidenceNumber} - ${beforeEvidence.name}`, request, {
+                        evidenceId: evidence.id,
+                        evidenceNumber: evidence.evidenceNumber,
+                        evidenceName: evidence.name,
+                    });
+                }
+                if (evidence.clueId) {
+                    await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CLUE, evidence.clueId, `新增关联证据：${evidence.evidenceNumber} - ${evidence.name}`, request, {
+                        evidenceId: evidence.id,
+                        evidenceNumber: evidence.evidenceNumber,
+                        evidenceName: evidence.name,
+                    });
+                }
+            }
+            return transformEvidence(evidence);
+        }
+        catch (error) {
+            reply.status(404).send({ error: '证据不存在' });
+        }
+    });
+    fastify.delete('/:id', async (request, reply) => {
+        try {
+            const evidence = await prisma_1.default.evidence.findUnique({
+                where: { id: request.params.id },
+            });
+            if (!evidence) {
+                reply.status(404).send({ error: '证据不存在' });
+                return;
+            }
+            if (evidence.filePath) {
+                const localPath = path_1.default.join(__dirname, '..', '..', evidence.filePath);
+                if (fs_1.default.existsSync(localPath)) {
+                    fs_1.default.unlinkSync(localPath);
+                }
+            }
+            const caseId = evidence.caseId;
+            const clueId = evidence.clueId;
+            await prisma_1.default.evidence.delete({
+                where: { id: request.params.id },
+            });
+            await (0, operationLog_1.logDelete)(operationLog_1.TargetType.EVIDENCE, request.params.id, `删除证据：${evidence.evidenceNumber} - ${evidence.name}`, request, {
+                id: evidence.id,
+                evidenceNumber: evidence.evidenceNumber,
+                name: evidence.name,
+                type: evidence.type,
+                status: evidence.status,
+                caseId: evidence.caseId,
+                clueId: evidence.clueId,
+            });
+            if (caseId) {
+                await (0, operationLog_1.logDisassociate)(operationLog_1.TargetType.CASE, caseId, `移除关联证据：${evidence.evidenceNumber} - ${evidence.name}`, request, {
+                    evidenceId: evidence.id,
+                    evidenceNumber: evidence.evidenceNumber,
+                    evidenceName: evidence.name,
+                });
+            }
+            if (clueId) {
+                await (0, operationLog_1.logDisassociate)(operationLog_1.TargetType.CLUE, clueId, `移除关联证据：${evidence.evidenceNumber} - ${evidence.name}`, request, {
+                    evidenceId: evidence.id,
+                    evidenceNumber: evidence.evidenceNumber,
+                    evidenceName: evidence.name,
+                });
+            }
+            return { success: true };
+        }
+        catch (error) {
+            reply.status(404).send({ error: '证据不存在' });
+        }
+    });
+    fastify.get('/:id/download', async (request, reply) => {
+        const evidence = await prisma_1.default.evidence.findUnique({
+            where: { id: request.params.id },
+        });
+        if (!evidence) {
+            reply.status(404).send({ error: '证据不存在' });
+            return;
+        }
+        const localPath = path_1.default.join(__dirname, '..', '..', evidence.filePath);
+        if (!fs_1.default.existsSync(localPath)) {
+            reply.status(404).send({ error: '文件不存在' });
+            return;
+        }
+        const stat = fs_1.default.statSync(localPath);
+        const stream = fs_1.default.createReadStream(localPath);
+        reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(evidence.fileName)}"`);
+        reply.header('Content-Type', evidence.mimeType || 'application/octet-stream');
+        reply.header('Content-Length', stat.size);
+        return reply.send(stream);
+    });
+    fastify.get('/:id/borrow-records', async (request, reply) => {
+        const { page = 1, pageSize = 10 } = request.query;
+        const skip = (page - 1) * pageSize;
+        const evidence = await prisma_1.default.evidence.findUnique({
+            where: { id: request.params.id },
+        });
+        if (!evidence) {
+            reply.status(404).send({ error: '证据不存在' });
+            return;
+        }
+        const [items, total] = await Promise.all([
+            prisma_1.default.evidenceBorrow.findMany({
+                where: { evidenceId: request.params.id },
+                skip,
+                take: pageSize,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    case: { select: { id: true, caseNumber: true, title: true } },
+                    clue: { select: { id: true, clueNumber: true, title: true } },
+                },
+            }),
+            prisma_1.default.evidenceBorrow.count({ where: { evidenceId: request.params.id } }),
+        ]);
+        return { items, total, page, pageSize };
+    });
+    fastify.post('/:id/borrow', async (request, reply) => {
+        const evidence = await prisma_1.default.evidence.findUnique({
+            where: { id: request.params.id },
+        });
+        if (!evidence) {
+            reply.status(404).send({ error: '证据不存在' });
+            return;
+        }
+        if (evidence.borrowStatus === '借阅中') {
+            reply.status(400).send({ error: '该证据当前已被借阅，无法重复借阅' });
+            return;
+        }
+        const data = request.body;
+        try {
+            const beforeData = {
+                borrowStatus: evidence.borrowStatus,
+                currentBorrower: evidence.currentBorrower,
+                borrowTime: evidence.borrowTime,
+            };
+            const borrowRecord = await prisma_1.default.evidenceBorrow.create({
+                data: {
+                    evidenceId: request.params.id,
+                    caseId: data.caseId || evidence.caseId,
+                    clueId: data.clueId || evidence.clueId,
+                    borrower: data.borrower,
+                    borrowerDepartment: data.borrowerDepartment,
+                    borrowReason: data.borrowReason,
+                    expectedReturnTime: data.expectedReturnTime ? new Date(data.expectedReturnTime) : null,
+                    operator: data.operator,
+                },
+                include: {
+                    case: { select: { id: true, caseNumber: true, title: true } },
+                    clue: { select: { id: true, clueNumber: true, title: true } },
+                },
+            });
+            const updatedEvidence = await prisma_1.default.evidence.update({
+                where: { id: request.params.id },
+                data: {
+                    borrowStatus: '借阅中',
+                    currentBorrower: data.borrower,
+                    borrowTime: new Date(),
+                },
+            });
+            await (0, operationLog_1.createOperationLog)({
+                targetType: operationLog_1.TargetType.EVIDENCE,
+                targetId: request.params.id,
+                action: operationLog_1.ActionType.BORROW,
+                description: `证据借阅：借阅人 ${data.borrower}，借阅原因：${data.borrowReason}`,
+                operator: data.operator,
+                beforeData,
+                afterData: {
+                    borrowStatus: '借阅中',
+                    currentBorrower: data.borrower,
+                    borrowTime: new Date().toISOString(),
+                },
+                ...(0, operationLog_1.getRequestMeta)(request),
+            });
+            return borrowRecord;
+        }
+        catch (error) {
+            reply.status(400).send({ error: '借阅登记失败' });
+        }
+    });
+    fastify.put('/:id/return', async (request, reply) => {
+        const evidence = await prisma_1.default.evidence.findUnique({
+            where: { id: request.params.id },
+        });
+        if (!evidence) {
+            reply.status(404).send({ error: '证据不存在' });
+            return;
+        }
+        if (evidence.borrowStatus !== '借阅中') {
+            reply.status(400).send({ error: '该证据当前未处于借阅状态，无法归还' });
+            return;
+        }
+        const data = request.body;
+        try {
+            const beforeData = {
+                borrowStatus: evidence.borrowStatus,
+                currentBorrower: evidence.currentBorrower,
+                borrowTime: evidence.borrowTime,
+            };
+            const activeBorrow = await prisma_1.default.evidenceBorrow.findFirst({
+                where: {
+                    evidenceId: request.params.id,
+                    status: '借阅中',
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            if (!activeBorrow) {
+                reply.status(404).send({ error: '未找到有效的借阅记录' });
+                return;
+            }
+            const borrowRecord = await prisma_1.default.evidenceBorrow.update({
+                where: { id: activeBorrow.id },
+                data: {
+                    status: '已归还',
+                    actualReturnTime: new Date(),
+                    returnNote: data.returnNote,
+                    returnOperator: data.returnOperator,
+                },
+                include: {
+                    case: { select: { id: true, caseNumber: true, title: true } },
+                    clue: { select: { id: true, clueNumber: true, title: true } },
+                },
+            });
+            await prisma_1.default.evidence.update({
+                where: { id: request.params.id },
+                data: {
+                    borrowStatus: '已归还',
+                    currentBorrower: null,
+                    borrowTime: null,
+                },
+            });
+            await (0, operationLog_1.createOperationLog)({
+                targetType: operationLog_1.TargetType.EVIDENCE,
+                targetId: request.params.id,
+                action: operationLog_1.ActionType.RETURN,
+                description: `证据归还：${data.returnNote ? '归还备注：' + data.returnNote : '已归还'}`,
+                operator: data.returnOperator,
+                beforeData,
+                afterData: {
+                    borrowStatus: '已归还',
+                    currentBorrower: null,
+                    borrowTime: null,
+                },
+                ...(0, operationLog_1.getRequestMeta)(request),
+            });
+            return borrowRecord;
+        }
+        catch (error) {
+            reply.status(400).send({ error: '归还确认失败' });
+        }
+    });
+    fastify.get('/borrow-records/all', async (request, reply) => {
+        const { page = 1, pageSize = 10, status, borrower, caseId, clueId } = request.query;
+        const skip = (page - 1) * pageSize;
+        const where = {};
+        if (status)
+            where.status = status;
+        if (borrower)
+            where.borrower = { contains: borrower, mode: 'insensitive' };
+        if (caseId)
+            where.caseId = caseId;
+        if (clueId)
+            where.clueId = clueId;
+        const [items, total] = await Promise.all([
+            prisma_1.default.evidenceBorrow.findMany({
+                where,
+                skip,
+                take: pageSize,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    evidence: { select: { id: true, evidenceNumber: true, name: true, type: true } },
+                    case: { select: { id: true, caseNumber: true, title: true } },
+                    clue: { select: { id: true, clueNumber: true, title: true } },
+                },
+            }),
+            prisma_1.default.evidenceBorrow.count({ where }),
+        ]);
+        return { items, total, page, pageSize };
+    });
+    fastify.post('/analyze', async (request, reply) => {
+        const { files } = request.body;
+        if (!files || !Array.isArray(files)) {
+            reply.status(400).send({ error: '请提供文件列表' });
+            return;
+        }
+        const analyzed = files.map((file) => {
+            const fileType = getFileType(file.mimeType, file.fileName);
+            const evidenceType = inferEvidenceType(file.mimeType, file.fileName);
+            const collectionMethod = inferCollectionMethod(file.mimeType, file.fileName);
+            const nameWithoutExt = path_1.default.basename(file.fileName, path_1.default.extname(file.fileName));
+            return {
+                fileName: file.fileName,
+                fileType,
+                evidenceType,
+                collectionMethod,
+                suggestedName: nameWithoutExt,
+                mimeType: file.mimeType,
+                fileSize: file.fileSize,
+            };
+        });
+        return { items: analyzed };
+    });
+    fastify.post('/upload-batch', async (request, reply) => {
+        const parts = request.parts();
+        const files = [];
+        const metadata = {};
+        for await (const part of parts) {
+            if (part.type === 'file') {
+                const fileId = (0, uuid_1.v4)();
+                const ext = path_1.default.extname(part.filename);
+                const fileName = `${fileId}${ext}`;
+                const filePath = path_1.default.join(UPLOAD_DIR, fileName);
+                const fileStream = fs_1.default.createWriteStream(filePath);
+                let fileSize = 0;
+                for await (const chunk of part.file) {
+                    fileSize += chunk.length;
+                    fileStream.write(chunk);
+                }
+                fileStream.end();
+                try {
+                    const hash = await computeFileHash(filePath);
+                    files.push({
+                        fileName: part.filename,
+                        storedName: fileName,
+                        filePath: `/uploads/${fileName}`,
+                        fileSize,
+                        mimeType: part.mimetype,
+                        hash,
+                    });
+                }
+                catch {
+                    files.push({
+                        fileName: part.filename,
+                        storedName: fileName,
+                        filePath: `/uploads/${fileName}`,
+                        fileSize,
+                        mimeType: part.mimetype,
+                    });
+                }
+            }
+            else {
+                metadata[part.fieldname] = part.value;
+            }
+        }
+        let evidenceOverrides = [];
+        if (metadata.evidences) {
+            try {
+                evidenceOverrides = JSON.parse(metadata.evidences);
+            }
+            catch {
+                evidenceOverrides = [];
+            }
+        }
+        const batchNumber = await generateBatchNumber();
+        const batch = await prisma_1.default.evidenceBatch.create({
+            data: {
+                batchNumber,
+                name: metadata.batchName || `${batchNumber} 批次入库`,
+                description: metadata.description,
+                caseId: metadata.caseId || null,
+                clueId: metadata.clueId || null,
+                collectionMethod: metadata.collectionMethod || null,
+                collector: metadata.collector || null,
+                collectTime: metadata.collectionTime || metadata.collectTime ? new Date(metadata.collectionTime || metadata.collectTime) : null,
+                location: metadata.location || null,
+                status: '已入库',
+                totalCount: files.length,
+                operator: metadata.operator || null,
+            },
+        });
+        const createdEvidences = [];
+        let successCount = 0;
+        let failCount = 0;
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const override = evidenceOverrides[i] || {};
+            try {
+                const evidenceNumber = await generateEvidenceNumber();
+                const inferredType = inferEvidenceType(file.mimeType, file.fileName);
+                const inferredMethod = inferCollectionMethod(file.mimeType, file.fileName);
+                const nameWithoutExt = path_1.default.basename(file.fileName, path_1.default.extname(file.fileName));
+                const evidence = await prisma_1.default.evidence.create({
+                    data: {
+                        evidenceNumber,
+                        batchId: batch.id,
+                        name: override.name || nameWithoutExt || file.fileName,
+                        description: override.description || metadata.description || null,
+                        type: override.evidenceType || inferredType,
+                        filePath: file.filePath,
+                        fileName: file.fileName,
+                        fileSize: file.fileSize,
+                        mimeType: file.mimeType,
+                        hash: file.hash || null,
+                        collectionMethod: override.collectionMethod || metadata.collectionMethod || inferredMethod || null,
+                        collector: override.collector || metadata.collector || null,
+                        collectTime: metadata.collectionTime || metadata.collectTime ? new Date(metadata.collectionTime || metadata.collectTime) : null,
+                        location: override.location || metadata.location || null,
+                        caseId: override.caseId || metadata.caseId || null,
+                        clueId: override.clueId || metadata.clueId || null,
+                        status: '已入库',
+                        note: override.note || null,
+                    },
+                });
+                createdEvidences.push(transformEvidence(evidence));
+                successCount++;
+            }
+            catch (err) {
+                failCount++;
+                createdEvidences.push({
+                    fileName: file.fileName,
+                    error: err instanceof Error ? err.message : '创建失败',
+                    success: false,
+                });
+            }
+        }
+        await prisma_1.default.evidenceBatch.update({
+            where: { id: batch.id },
+            data: { successCount, failCount },
+        });
+        await (0, operationLog_1.createOperationLog)({
+            targetType: operationLog_1.TargetType.EVIDENCE_BATCH,
+            targetId: batch.id,
+            action: operationLog_1.ActionType.BATCH_UPLOAD,
+            description: `批量上传证据：${batch.batchNumber} - ${batch.name}，共${files.length}份，成功${successCount}份，失败${failCount}份`,
+            operator: metadata.operator,
+            afterData: {
+                batchId: batch.id,
+                batchNumber: batch.batchNumber,
+                batchName: batch.name,
+                totalCount: files.length,
+                successCount,
+                failCount,
+                caseId: batch.caseId,
+                clueId: batch.clueId,
+            },
+            ...(0, operationLog_1.getRequestMeta)(request),
+        });
+        if (batch.caseId) {
+            await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CASE, batch.caseId, `批量上传证据：${batch.batchNumber}，共${successCount}份证据`, request, {
+                batchId: batch.id,
+                batchNumber: batch.batchNumber,
+                evidenceCount: successCount,
+            });
+        }
+        if (batch.clueId) {
+            await (0, operationLog_1.logAssociate)(operationLog_1.TargetType.CLUE, batch.clueId, `批量上传证据：${batch.batchNumber}，共${successCount}份证据`, request, {
+                batchId: batch.id,
+                batchNumber: batch.batchNumber,
+                evidenceCount: successCount,
+            });
+        }
+        return {
+            batch: {
+                id: batch.id,
+                batchNumber: batch.batchNumber,
+                name: batch.name,
+                totalCount: batch.totalCount,
+                successCount,
+                failCount,
+            },
+            evidences: createdEvidences,
+        };
+    });
+    fastify.get('/batches', async (request, reply) => {
+        const { page = 1, pageSize = 10, caseId, keyword } = request.query;
+        const skip = (page - 1) * pageSize;
+        const where = {};
+        if (caseId)
+            where.caseId = caseId;
+        if (keyword) {
+            where.OR = [
+                { batchNumber: { contains: keyword, mode: 'insensitive' } },
+                { name: { contains: keyword, mode: 'insensitive' } },
+            ];
+        }
+        const [items, total] = await Promise.all([
+            prisma_1.default.evidenceBatch.findMany({
+                where,
+                skip,
+                take: pageSize,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    case: { select: { id: true, caseNumber: true, title: true } },
+                    clue: { select: { id: true, clueNumber: true, title: true } },
+                    _count: { select: { evidences: true } },
+                },
+            }),
+            prisma_1.default.evidenceBatch.count({ where }),
+        ]);
+        return { items, total, page, pageSize };
+    });
+    fastify.get('/batches/:id', async (request, reply) => {
+        const batch = await prisma_1.default.evidenceBatch.findUnique({
+            where: { id: request.params.id },
+            include: {
+                case: { select: { id: true, caseNumber: true, title: true } },
+                clue: { select: { id: true, clueNumber: true, title: true } },
+                evidences: true,
+            },
+        });
+        if (!batch) {
+            reply.status(404).send({ error: '批次不存在' });
+            return;
+        }
+        return {
+            ...batch,
+            evidences: batch.evidences.map((e) => transformEvidence(e)),
+        };
+    });
+    fastify.delete('/batches/:id', async (request, reply) => {
+        try {
+            const batch = await prisma_1.default.evidenceBatch.findUnique({
+                where: { id: request.params.id },
+                include: { evidences: true },
+            });
+            if (!batch) {
+                reply.status(404).send({ error: '批次不存在' });
+                return;
+            }
+            const caseId = batch.caseId;
+            const clueId = batch.clueId;
+            const evidenceIds = batch.evidences.map(e => e.id);
+            for (const evidence of batch.evidences) {
+                if (evidence.filePath) {
+                    const localPath = path_1.default.join(__dirname, '..', '..', evidence.filePath);
+                    if (fs_1.default.existsSync(localPath)) {
+                        try {
+                            fs_1.default.unlinkSync(localPath);
+                        }
+                        catch { }
+                    }
+                }
+            }
+            await prisma_1.default.evidenceBatch.delete({
+                where: { id: request.params.id },
+            });
+            await (0, operationLog_1.logDelete)(operationLog_1.TargetType.EVIDENCE_BATCH, request.params.id, `删除证据批次：${batch.batchNumber} - ${batch.name}，共${batch.evidences.length}份证据`, request, {
+                id: batch.id,
+                batchNumber: batch.batchNumber,
+                name: batch.name,
+                evidenceCount: batch.evidences.length,
+                caseId: batch.caseId,
+                clueId: batch.clueId,
+            });
+            if (caseId) {
+                await (0, operationLog_1.logDisassociate)(operationLog_1.TargetType.CASE, caseId, `删除证据批次：${batch.batchNumber}，共${batch.evidences.length}份证据`, request, {
+                    batchId: batch.id,
+                    batchNumber: batch.batchNumber,
+                    evidenceCount: batch.evidences.length,
+                });
+            }
+            if (clueId) {
+                await (0, operationLog_1.logDisassociate)(operationLog_1.TargetType.CLUE, clueId, `删除证据批次：${batch.batchNumber}，共${batch.evidences.length}份证据`, request, {
+                    batchId: batch.id,
+                    batchNumber: batch.batchNumber,
+                    evidenceCount: batch.evidences.length,
+                });
+            }
+            return { success: true };
+        }
+        catch (error) {
+            reply.status(500).send({ error: '删除批次失败' });
+        }
+    });
+}

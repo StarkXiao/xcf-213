@@ -420,45 +420,6 @@ export default async function (fastify: FastifyInstance) {
       data.approver
     );
 
-    if (data.pass && transfer.transferType === 'STORAGE_IN') {
-      await prisma.evidence.update({
-        where: { id: transfer.evidenceId },
-        data: { status: '已入库' },
-      });
-    }
-
-    if (data.pass && transfer.transferType === 'BORROW') {
-      await prisma.evidence.update({
-        where: { id: transfer.evidenceId },
-        data: {
-          borrowStatus: '借阅中',
-          currentBorrower: transfer.toPerson,
-          borrowTime: new Date(),
-        },
-      });
-    }
-
-    if (data.pass && transfer.transferType === 'DESTROY') {
-      await prisma.evidence.update({
-        where: { id: transfer.evidenceId },
-        data: { status: '已销毁' },
-      });
-    }
-
-    if (data.pass && transfer.transferType === 'SEAL') {
-      await prisma.evidence.update({
-        where: { id: transfer.evidenceId },
-        data: { status: '已封存' },
-      });
-    }
-
-    if (data.pass && transfer.transferType === 'UNSEAL') {
-      await prisma.evidence.update({
-        where: { id: transfer.evidenceId },
-        data: { status: '已入库' },
-      });
-    }
-
     return transformTransfer(updated);
   });
 
@@ -567,6 +528,47 @@ export default async function (fastify: FastifyInstance) {
       await prisma.evidence.update({
         where: { id: transfer.evidenceId },
         data: {
+          collector: data.receiver,
+        },
+      });
+    }
+
+    if (transfer.transferType === 'STORAGE_IN') {
+      await prisma.evidence.update({
+        where: { id: transfer.evidenceId },
+        data: {
+          status: '已入库',
+          collector: data.receiver,
+        },
+      });
+    }
+
+    if (transfer.transferType === 'BORROW') {
+      await prisma.evidence.update({
+        where: { id: transfer.evidenceId },
+        data: {
+          borrowStatus: '借阅中',
+          currentBorrower: data.receiver || transfer.toPerson,
+          borrowTime: new Date(),
+        },
+      });
+    }
+
+    if (transfer.transferType === 'SEAL') {
+      await prisma.evidence.update({
+        where: { id: transfer.evidenceId },
+        data: {
+          status: '已封存',
+          collector: data.receiver,
+        },
+      });
+    }
+
+    if (transfer.transferType === 'UNSEAL') {
+      await prisma.evidence.update({
+        where: { id: transfer.evidenceId },
+        data: {
+          status: '已入库',
           collector: data.receiver,
         },
       });
