@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, message, Popconfirm } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, message, Popconfirm, Timeline, Statistic, Row, Col, Checkbox, Empty, Spin } from 'antd';
+import {
+  ArrowLeftOutlined, EditOutlined, DeleteOutlined, UserAddOutlined,
+  SolutionOutlined, FileTextOutlined, BulbOutlined, SwapOutlined
+} from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { personApi } from '../../services/api';
@@ -14,17 +17,42 @@ const personTypeColors: Record<string, string> = {
   '其他': 'default',
 };
 
+const timelineEventColors: Record<string, string> = {
+  case_association: '#1677ff',
+  clue_association: '#52c41a',
+  relation_added: '#722ed1',
+  role_change: '#fa8c16',
+};
+
+const timelineEventIcons: Record<string, any> = {
+  case_association: <FileTextOutlined />,
+  clue_association: <BulbOutlined />,
+  relation_added: <UserAddOutlined />,
+  role_change: <SwapOutlined />,
+};
+
+const eventTypeLabels: Record<string, string> = {
+  case_association: '案件关联',
+  clue_association: '线索关联',
+  relation_added: '关系新增',
+  role_change: '角色变更',
+};
+
 export default function PersonDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [personData, setPersonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [relations, setRelations] = useState<any>({ nodes: [], edges: [] });
+  const [timelineData, setTimelineData] = useState<any>({ events: [], stats: {} });
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [eventFilters, setEventFilters] = useState<string[]>(['case_association', 'clue_association', 'relation_added', 'role_change']);
 
   useEffect(() => {
     if (id) {
       loadPersonData();
       loadRelations();
+      loadTimeline();
     }
   }, [id]);
 
@@ -48,6 +76,26 @@ export default function PersonDetail() {
       console.error('Failed to load relations:', error);
     }
   };
+
+  const loadTimeline = async () => {
+    setTimelineLoading(true);
+    try {
+      const res = await personApi.getRelationTimeline(id!);
+      setTimelineData(res.data);
+    } catch (error) {
+      console.error('Failed to load timeline:', error);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const handleFilterChange = (checkedValues: string[]) => {
+    setEventFilters(checkedValues);
+  };
+
+  const filteredEvents = timelineData.events?.filter((event: any) =>
+    eventFilters.includes(event.type)
+  ) || [];
 
   const handleDelete = async () => {
     try {
@@ -215,6 +263,177 @@ export default function PersonDetail() {
       children: (
         <div className="graph-container">
           <ReactECharts option={graphOption} style={{ height: '600px' }} />
+        </div>
+      ),
+    },
+    {
+      key: 'timeline',
+      label: '关系演化',
+      children: (
+        <div>
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={6}>
+              <Card size="small">
+                <Statistic
+                  title="案件关联"
+                  value={timelineData.stats?.caseAssociations || 0}
+                  valueStyle={{ color: timelineEventColors.case_association }}
+                  prefix={<FileTextOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card size="small">
+                <Statistic
+                  title="线索关联"
+                  value={timelineData.stats?.clueAssociations || 0}
+                  valueStyle={{ color: timelineEventColors.clue_association }}
+                  prefix={<BulbOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card size="small">
+                <Statistic
+                  title="关系新增"
+                  value={timelineData.stats?.relations || 0}
+                  valueStyle={{ color: timelineEventColors.relation_added }}
+                  prefix={<UserAddOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card size="small">
+                <Statistic
+                  title="角色变更"
+                  value={timelineData.stats?.roleChanges || 0}
+                  valueStyle={{ color: timelineEventColors.role_change }}
+                  prefix={<SwapOutlined />}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space>
+              <span style={{ color: '#666' }}>筛选：</span>
+              <Checkbox.Group
+                options={[
+                  { label: '案件关联', value: 'case_association' },
+                  { label: '线索关联', value: 'clue_association' },
+                  { label: '关系新增', value: 'relation_added' },
+                  { label: '角色变更', value: 'role_change' },
+                ]}
+                value={eventFilters}
+                onChange={handleFilterChange}
+              />
+            </Space>
+          </Card>
+
+          <Spin spinning={timelineLoading} tip="加载中...">
+            {filteredEvents.length === 0 ? (
+              <Empty description="暂无关系演化记录" />
+            ) : (
+              <Timeline
+                mode="left"
+                items={filteredEvents.map((event: any) => ({
+                  color: timelineEventColors[event.type],
+                  dot: timelineEventIcons[event.type],
+                  label: (
+                    <div style={{ minWidth: 180, color: '#666' }}>
+                      <div>{moment(event.timestamp).format('YYYY-MM-DD')}</div>
+                      <div style={{ fontSize: 12 }}>{moment(event.timestamp).format('HH:mm:ss')}</div>
+                    </div>
+                  ),
+                  children: (
+                    <Card size="small" style={{ marginBottom: 8 }}>
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Space>
+                          <Tag color={timelineEventColors[event.type]}>{event.eventType}</Tag>
+                          <strong>{event.title}</strong>
+                        </Space>
+                        <div style={{ color: '#333' }}>{event.description}</div>
+
+                        {event.case && (
+                          <div style={{ fontSize: 13, color: '#666' }}>
+                            案件：
+                            <a
+                              onClick={() => navigate(`/cases/${event.case.id}`)}
+                              style={{ marginLeft: 4 }}
+                            >
+                              {event.case.title}
+                            </a>
+                            <span style={{ fontFamily: 'monospace', marginLeft: 8 }}>
+                              {event.case.caseNumber}
+                            </span>
+                          </div>
+                        )}
+
+                        {event.clue && (
+                          <div style={{ fontSize: 13, color: '#666' }}>
+                            线索：
+                            <a
+                              onClick={() => navigate(`/clues/${event.clue.id}`)}
+                              style={{ marginLeft: 4 }}
+                            >
+                              {event.clue.title}
+                            </a>
+                            <span style={{ fontFamily: 'monospace', marginLeft: 8 }}>
+                              {event.clue.clueNumber}
+                            </span>
+                          </div>
+                        )}
+
+                        {event.relatedPerson && (
+                          <div style={{ fontSize: 13, color: '#666' }}>
+                            关联人员：
+                            <a
+                              onClick={() => navigate(`/persons/${event.relatedPerson.id}`)}
+                              style={{ marginLeft: 4 }}
+                            >
+                              {event.relatedPerson.name}
+                            </a>
+                            <Tag
+                              color={personTypeColors[event.relatedPerson.personType]}
+                              style={{ marginLeft: 8 }}
+                            >
+                              {event.relatedPerson.personType}
+                            </Tag>
+                          </div>
+                        )}
+
+                        {event.role && (
+                          <div style={{ fontSize: 13, color: '#666' }}>
+                            角色：<Tag color="blue">{event.role}</Tag>
+                          </div>
+                        )}
+
+                        {event.oldRole && event.newRole && (
+                          <Space style={{ fontSize: 13 }}>
+                            <Tag color="default">{event.oldRole}</Tag>
+                            <span style={{ color: '#999' }}>→</span>
+                            <Tag color="orange">{event.newRole}</Tag>
+                          </Space>
+                        )}
+
+                        {event.descriptionDetail && (
+                          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
+                            备注：{event.descriptionDetail}
+                          </div>
+                        )}
+
+                        {event.note && (
+                          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
+                            备注：{event.note}
+                          </div>
+                        )}
+                      </Space>
+                    </Card>
+                  ),
+                }))}
+              />
+            )}
+          </Spin>
         </div>
       ),
     },

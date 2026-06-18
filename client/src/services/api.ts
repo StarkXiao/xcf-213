@@ -51,6 +51,7 @@ export const personApi = {
   getRelations: (id: string) => api.get(`/persons/${id}/relations`),
   getAllRelations: () => api.get('/persons/relations/all'),
   addRelation: (id: string, data: any) => api.post(`/persons/${id}/relations`, data),
+  getRelationTimeline: (id: string) => api.get(`/persons/${id}/relation-timeline`),
 };
 
 export const relationApi = {
