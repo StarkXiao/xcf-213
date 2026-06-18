@@ -8,6 +8,7 @@ import {
   ShareAltOutlined,
   PaperClipOutlined,
   FilterOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -47,6 +48,11 @@ const menuItems = [
     key: '/search',
     icon: <FilterOutlined />,
     label: '查询筛选',
+  },
+  {
+    key: '/operation-logs',
+    icon: <HistoryOutlined />,
+    label: '操作日志',
   },
 ];
 

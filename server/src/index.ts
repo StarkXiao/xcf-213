@@ -11,6 +11,7 @@ import personRoutes from './routes/persons';
 import relationRoutes from './routes/relations';
 import evidenceRoutes from './routes/evidences';
 import searchRoutes from './routes/search';
+import operationLogRoutes from './routes/operationLogs';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -49,6 +50,7 @@ server.register(personRoutes, { prefix: '/api/persons' });
 server.register(relationRoutes, { prefix: '/api/relations' });
 server.register(evidenceRoutes, { prefix: '/api/evidences' });
 server.register(searchRoutes, { prefix: '/api/search' });
+server.register(operationLogRoutes, { prefix: '/api/operation-logs' });
 
 const start = async () => {
   try {

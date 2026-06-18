@@ -16,6 +16,7 @@ import EvidenceList from './pages/evidences/EvidenceList';
 import EvidenceDetail from './pages/evidences/EvidenceDetail';
 import EvidenceUpload from './pages/evidences/EvidenceUpload';
 import AdvancedSearch from './pages/search/AdvancedSearch';
+import OperationLogList from './pages/logs/OperationLogList';
 
 const { Content } = Layout;
 
@@ -50,6 +51,8 @@ function App() {
             <Route path="/evidences/:id" element={<EvidenceDetail />} />
 
             <Route path="/search" element={<AdvancedSearch />} />
+
+            <Route path="/operation-logs" element={<OperationLogList />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

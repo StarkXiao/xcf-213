@@ -124,4 +124,13 @@ export const searchApi = {
   options: () => api.get('/search/options'),
 };
 
+export const operationLogApi = {
+  list: (params?: any) => api.get('/operation-logs', { params }),
+  get: (id: string) => api.get(`/operation-logs/${id}`),
+  stats: () => api.get('/operation-logs/stats'),
+  options: () => api.get('/operation-logs/options'),
+  getByTarget: (targetType: string, targetId: string, params?: any) =>
+    api.get(`/operation-logs/target/${targetType}/${targetId}`, { params }),
+};
+
 export default api;
