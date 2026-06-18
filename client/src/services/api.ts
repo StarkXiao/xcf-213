@@ -72,6 +72,21 @@ export const evidenceApi = {
         }
       },
     }),
+  analyze: (files: Array<{ fileName: string; mimeType?: string; fileSize?: number }>) =>
+    api.post('/evidences/analyze', { files }),
+  uploadBatch: (formData: FormData, onProgress?: (progress: number) => void) =>
+    api.post('/evidences/upload-batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percentCompleted);
+        }
+      },
+    }),
+  listBatches: (params?: any) => api.get('/evidences/batches', { params }),
+  getBatch: (id: string) => api.get(`/evidences/batches/${id}`),
+  deleteBatch: (id: string) => api.delete(`/evidences/batches/${id}`),
   update: (id: string, data: any) => api.put(`/evidences/${id}`, data),
   delete: (id: string) => api.delete(`/evidences/${id}`),
   download: (id: string) => api.get(`/evidences/${id}/download`, { responseType: 'blob' }),

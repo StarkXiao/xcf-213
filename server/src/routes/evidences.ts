@@ -3,8 +3,13 @@ import prisma from '../lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
 interface EvidenceQuery {
   page?: number;
@@ -15,9 +20,11 @@ interface EvidenceQuery {
   status?: string;
   caseId?: string;
   clueId?: string;
+  batchId?: string;
 }
 
 interface EvidenceCreate {
+  batchId?: string;
   caseId?: string;
   clueId?: string;
   name: string;
@@ -38,6 +45,26 @@ interface EvidenceCreate {
 }
 
 interface EvidenceUpdate extends Partial<EvidenceCreate> {}
+
+interface FileAnalysisItem {
+  fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+}
+
+interface BatchUploadMetadata {
+  batchName?: string;
+  description?: string;
+  caseId?: string;
+  clueId?: string;
+  collectionMethod?: string;
+  collector?: string;
+  collectTime?: string;
+  collectionTime?: string;
+  location?: string;
+  operator?: string;
+  evidences?: string;
+}
 
 interface BorrowCreate {
   borrower: string;
@@ -107,6 +134,97 @@ export default async function (fastify: FastifyInstance) {
     return 'other';
   };
 
+  const inferEvidenceType = (mimeType?: string, fileName?: string): string => {
+    const fileType = getFileType(mimeType, fileName);
+    const name = (fileName || '').toLowerCase();
+
+    if (fileType === 'image') {
+      if (/(现场|勘查|勘验|scene|site|survey)/i.test(name)) return '勘验笔录';
+      if (/(伤情|鉴定|伤势|injury|identify)/i.test(name)) return '鉴定意见';
+      if (/(证件|身份|身份证|id|card)/i.test(name)) return '书证';
+      return '物证';
+    }
+
+    if (fileType === 'video') {
+      if (/(监控|录像|surveillance|camera)/i.test(name)) return '视听资料';
+      if (/(讯问|询问|笔录|interrogate|inquiry)/i.test(name)) return '视听资料';
+      return '视听资料';
+    }
+
+    if (fileType === 'audio') {
+      if (/(讯问|询问|通话|录音|interrogate|inquiry|record)/i.test(name)) return '犯罪嫌疑人供述';
+      if (/(证人|证言|witness|testimony)/i.test(name)) return '证人证言';
+      if (/(被害人|受害者|victim)/i.test(name)) return '被害人陈述';
+      return '视听资料';
+    }
+
+    if (fileType === 'document') {
+      if (/(鉴定|意见书|报告|identify|report)/i.test(name)) return '鉴定意见';
+      if (/(勘验|笔录|现场勘查|inspection|survey)/i.test(name)) return '勘验笔录';
+      if (/(证人|证言|witness)/i.test(name)) return '证人证言';
+      if (/(供述|陈述|讯问|询问)/i.test(name)) {
+        if (/(被害人|受害者|victim)/i.test(name)) return '被害人陈述';
+        return '犯罪嫌疑人供述';
+      }
+      if (/(合同|协议|借条|收据|发票|单据|证明|contract|receipt|invoice)/i.test(name)) return '书证';
+      return '书证';
+    }
+
+    if (fileType === 'archive') {
+      if (/(电子|数据|聊天|日志|email|邮件|聊天记录|log)/i.test(name)) return '电子数据';
+      return '其他';
+    }
+
+    if (/\.(db|sql|bak|log|eml|msg)$/i.test(name) || /(聊天|记录|日志|数据库|邮件|email|电子|数据)/i.test(name)) {
+      return '电子数据';
+    }
+
+    return '物证';
+  };
+
+  const inferCollectionMethod = (mimeType?: string, fileName?: string): string => {
+    const fileType = getFileType(mimeType, fileName);
+    const name = (fileName || '').toLowerCase();
+
+    if (/(扣押|seizure|seize)/i.test(name)) return '扣押';
+    if (/(提取|extract)/i.test(name)) return '提取';
+    if (/(调取|调取证据|obtain)/i.test(name)) return '调取证据';
+    if (/(搜查|search)/i.test(name)) return '搜查';
+    if (/(勘验|勘查|inspection|survey)/i.test(name)) return '现场勘查';
+    if (/(鉴定|identify)/i.test(name)) return '鉴定';
+    if (/(扣押|seizure|seize)/i.test(name)) return '扣押';
+
+    if (fileType === 'image') {
+      if (/(现场|scene|site)/i.test(name)) return '现场勘查';
+      return '拍照固定';
+    }
+    if (fileType === 'video' || fileType === 'audio') return '录音录像';
+    if (fileType === 'document') return '调取证据';
+    if (fileType === 'archive') return '电子数据提取';
+
+    return '扣押';
+  };
+
+  const generateEvidenceNumber = async (): Promise<string> => {
+    const count = await prisma.evidence.count();
+    return `ZJ${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+  };
+
+  const generateBatchNumber = async (): Promise<string> => {
+    const count = await prisma.evidenceBatch.count();
+    return `PC${new Date().getFullYear()}${String(count + 1).padStart(6, '0')}`;
+  };
+
+  const computeFileHash = (filePath: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath);
+      stream.on('data', (data) => hash.update(data));
+      stream.on('end', () => resolve(hash.digest('hex')));
+      stream.on('error', reject);
+    });
+  };
+
   const transformEvidence = (evidence: any) => ({
     ...evidence,
     evidenceType: evidence.type,
@@ -117,7 +235,7 @@ export default async function (fastify: FastifyInstance) {
   });
 
   fastify.get('/', async (request: FastifyRequest<{ Querystring: EvidenceQuery }>, reply) => {
-    const { page = 1, pageSize = 10, keyword, evidenceType, fileType, status, caseId, clueId } = request.query;
+    const { page = 1, pageSize = 10, keyword, evidenceType, fileType, status, caseId, clueId, batchId } = request.query;
     const skip = (page - 1) * pageSize;
 
     const where: any = {};
@@ -134,6 +252,7 @@ export default async function (fastify: FastifyInstance) {
     if (status) where.status = status;
     if (caseId) where.caseId = caseId;
     if (clueId) where.clueId = clueId;
+    if (batchId) where.batchId = batchId;
 
     const [items, total] = await Promise.all([
       prisma.evidence.findMany({
@@ -593,5 +712,263 @@ export default async function (fastify: FastifyInstance) {
     ]);
 
     return { items, total, page, pageSize };
+  });
+
+  fastify.post('/analyze', async (request: FastifyRequest<{ Body: { files: FileAnalysisItem[] } }>, reply) => {
+    const { files } = request.body;
+
+    if (!files || !Array.isArray(files)) {
+      reply.status(400).send({ error: '请提供文件列表' });
+      return;
+    }
+
+    const analyzed = files.map((file) => {
+      const fileType = getFileType(file.mimeType, file.fileName);
+      const evidenceType = inferEvidenceType(file.mimeType, file.fileName);
+      const collectionMethod = inferCollectionMethod(file.mimeType, file.fileName);
+      const nameWithoutExt = path.basename(file.fileName, path.extname(file.fileName));
+
+      return {
+        fileName: file.fileName,
+        fileType,
+        evidenceType,
+        collectionMethod,
+        suggestedName: nameWithoutExt,
+        mimeType: file.mimeType,
+        fileSize: file.fileSize,
+      };
+    });
+
+    return { items: analyzed };
+  });
+
+  fastify.post('/upload-batch', async (request, reply) => {
+    const parts = request.parts();
+    const files: Array<{
+      fileName: string;
+      storedName: string;
+      filePath: string;
+      fileSize: number;
+      mimeType: string;
+      hash?: string;
+    }> = [];
+    const metadata: any = {};
+
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        const fileId = uuidv4();
+        const ext = path.extname(part.filename);
+        const fileName = `${fileId}${ext}`;
+        const filePath = path.join(UPLOAD_DIR, fileName);
+
+        const fileStream = fs.createWriteStream(filePath);
+        let fileSize = 0;
+
+        for await (const chunk of part.file) {
+          fileSize += chunk.length;
+          fileStream.write(chunk);
+        }
+
+        fileStream.end();
+
+        try {
+          const hash = await computeFileHash(filePath);
+          files.push({
+            fileName: part.filename,
+            storedName: fileName,
+            filePath: `/uploads/${fileName}`,
+            fileSize,
+            mimeType: part.mimetype,
+            hash,
+          });
+        } catch {
+          files.push({
+            fileName: part.filename,
+            storedName: fileName,
+            filePath: `/uploads/${fileName}`,
+            fileSize,
+            mimeType: part.mimetype,
+          });
+        }
+      } else {
+        metadata[part.fieldname] = part.value;
+      }
+    }
+
+    let evidenceOverrides: any[] = [];
+    if (metadata.evidences) {
+      try {
+        evidenceOverrides = JSON.parse(metadata.evidences);
+      } catch {
+        evidenceOverrides = [];
+      }
+    }
+
+    const batchNumber = await generateBatchNumber();
+    const batch = await prisma.evidenceBatch.create({
+      data: {
+        batchNumber,
+        name: metadata.batchName || `${batchNumber} 批次入库`,
+        description: metadata.description,
+        caseId: metadata.caseId || null,
+        clueId: metadata.clueId || null,
+        collectionMethod: metadata.collectionMethod || null,
+        collector: metadata.collector || null,
+        collectTime: metadata.collectionTime || metadata.collectTime ? new Date(metadata.collectionTime || metadata.collectTime) : null,
+        location: metadata.location || null,
+        status: '已入库',
+        totalCount: files.length,
+        operator: metadata.operator || null,
+      },
+    });
+
+    const createdEvidences: any[] = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const override = evidenceOverrides[i] || {};
+
+      try {
+        const evidenceNumber = await generateEvidenceNumber();
+        const inferredType = inferEvidenceType(file.mimeType, file.fileName);
+        const inferredMethod = inferCollectionMethod(file.mimeType, file.fileName);
+        const nameWithoutExt = path.basename(file.fileName, path.extname(file.fileName));
+
+        const evidence = await prisma.evidence.create({
+          data: {
+            evidenceNumber,
+            batchId: batch.id,
+            name: override.name || nameWithoutExt || file.fileName,
+            description: override.description || metadata.description || null,
+            type: override.evidenceType || inferredType,
+            filePath: file.filePath,
+            fileName: file.fileName,
+            fileSize: file.fileSize,
+            mimeType: file.mimeType,
+            hash: file.hash || null,
+            collectionMethod: override.collectionMethod || metadata.collectionMethod || inferredMethod || null,
+            collector: override.collector || metadata.collector || null,
+            collectTime: metadata.collectionTime || metadata.collectTime ? new Date(metadata.collectionTime || metadata.collectTime) : null,
+            location: override.location || metadata.location || null,
+            caseId: override.caseId || metadata.caseId || null,
+            clueId: override.clueId || metadata.clueId || null,
+            status: '已入库',
+            note: override.note || null,
+          },
+        });
+
+        createdEvidences.push(transformEvidence(evidence));
+        successCount++;
+      } catch (err) {
+        failCount++;
+        createdEvidences.push({
+          fileName: file.fileName,
+          error: err instanceof Error ? err.message : '创建失败',
+          success: false,
+        });
+      }
+    }
+
+    await prisma.evidenceBatch.update({
+      where: { id: batch.id },
+      data: { successCount, failCount },
+    });
+
+    return {
+      batch: {
+        id: batch.id,
+        batchNumber: batch.batchNumber,
+        name: batch.name,
+        totalCount: batch.totalCount,
+        successCount,
+        failCount,
+      },
+      evidences: createdEvidences,
+    };
+  });
+
+  fastify.get('/batches', async (request: FastifyRequest<{ Querystring: { page?: number; pageSize?: number; caseId?: string; keyword?: string } }>, reply) => {
+    const { page = 1, pageSize = 10, caseId, keyword } = request.query;
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {};
+    if (caseId) where.caseId = caseId;
+    if (keyword) {
+      where.OR = [
+        { batchNumber: { contains: keyword, mode: 'insensitive' } },
+        { name: { contains: keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.evidenceBatch.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          case: { select: { id: true, caseNumber: true, title: true } },
+          clue: { select: { id: true, clueNumber: true, title: true } },
+          _count: { select: { evidences: true } },
+        },
+      }),
+      prisma.evidenceBatch.count({ where }),
+    ]);
+
+    return { items, total, page, pageSize };
+  });
+
+  fastify.get('/batches/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const batch = await prisma.evidenceBatch.findUnique({
+      where: { id: request.params.id },
+      include: {
+        case: { select: { id: true, caseNumber: true, title: true } },
+        clue: { select: { id: true, clueNumber: true, title: true } },
+        evidences: true,
+      },
+    });
+
+    if (!batch) {
+      reply.status(404).send({ error: '批次不存在' });
+      return;
+    }
+
+    return {
+      ...batch,
+      evidences: batch.evidences.map((e: any) => transformEvidence(e)),
+    };
+  });
+
+  fastify.delete('/batches/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    try {
+      const batch = await prisma.evidenceBatch.findUnique({
+        where: { id: request.params.id },
+        include: { evidences: true },
+      });
+
+      if (!batch) {
+        reply.status(404).send({ error: '批次不存在' });
+        return;
+      }
+
+      for (const evidence of batch.evidences) {
+        if (evidence.filePath) {
+          const localPath = path.join(__dirname, '..', '..', evidence.filePath);
+          if (fs.existsSync(localPath)) {
+            try { fs.unlinkSync(localPath); } catch {}
+          }
+        }
+      }
+
+      await prisma.evidenceBatch.delete({
+        where: { id: request.params.id },
+      });
+
+      return { success: true };
+    } catch (error) {
+      reply.status(500).send({ error: '删除批次失败' });
+    }
   });
 }

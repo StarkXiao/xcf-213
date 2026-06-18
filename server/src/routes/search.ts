@@ -288,7 +288,7 @@ export default async function (fastify: FastifyInstance) {
     let transformedEvidences = evidences.map(e => ({
       ...e,
       evidenceType: e.type,
-      fileType: getFileType(e.mimeType, e.fileName),
+      fileType: getFileType(e.mimeType || undefined, e.fileName || undefined),
       fileUrl: e.filePath,
       collectionTime: e.collectTime,
     }));
