@@ -14,6 +14,8 @@ import {
   WarningOutlined,
   SwapOutlined,
   CoffeeOutlined,
+  SafetyCertificateOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -63,6 +65,16 @@ const menuItems = [
     key: '/risk-profiles',
     icon: <WarningOutlined />,
     label: '风险画像',
+  },
+  {
+    key: '/surveillance-rules',
+    icon: <SafetyCertificateOutlined />,
+    label: '布控预警规则',
+  },
+  {
+    key: '/alerts',
+    icon: <BellOutlined />,
+    label: '预警消息处置',
   },
   {
     key: '/evidences',

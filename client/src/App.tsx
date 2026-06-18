@@ -27,6 +27,10 @@ import RiskProfileDetail from './pages/risk-profiles/RiskProfileDetail';
 import CaseMeetingList from './pages/case-meetings/CaseMeetingList';
 import CaseMeetingDetail from './pages/case-meetings/CaseMeetingDetail';
 import CaseMeetingForm from './pages/case-meetings/CaseMeetingForm';
+import SurveillanceRuleList from './pages/surveillance/SurveillanceRuleList';
+import SurveillanceRuleForm from './pages/surveillance/SurveillanceRuleForm';
+import AlertList from './pages/surveillance/AlertList';
+import AlertDetail from './pages/surveillance/AlertDetail';
 
 const { Content } = Layout;
 
@@ -79,6 +83,13 @@ function App() {
             <Route path="/case-meetings/new" element={<CaseMeetingForm />} />
             <Route path="/case-meetings/:id" element={<CaseMeetingDetail />} />
             <Route path="/case-meetings/:id/edit" element={<CaseMeetingForm />} />
+
+            <Route path="/surveillance-rules" element={<SurveillanceRuleList />} />
+            <Route path="/surveillance-rules/new" element={<SurveillanceRuleForm />} />
+            <Route path="/surveillance-rules/:id/edit" element={<SurveillanceRuleForm />} />
+
+            <Route path="/alerts" element={<AlertList />} />
+            <Route path="/alerts/:id" element={<AlertDetail />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

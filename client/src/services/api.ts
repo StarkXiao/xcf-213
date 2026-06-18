@@ -213,6 +213,30 @@ export const riskProfileApi = {
   recalculate: (id: string) => api.get(`/risk-profiles/${id}/recalculate`),
 };
 
+export const surveillanceRuleApi = {
+  list: (params?: any) => api.get('/surveillance-rules', { params }),
+  getStats: () => api.get('/surveillance-rules/stats'),
+  get: (id: string) => api.get(`/surveillance-rules/${id}`),
+  create: (data: any) => api.post('/surveillance-rules', data),
+  update: (id: string, data: any) => api.put(`/surveillance-rules/${id}`, data),
+  delete: (id: string) => api.delete(`/surveillance-rules/${id}`),
+  toggle: (id: string, data?: any) => api.post(`/surveillance-rules/${id}/toggle`, data),
+  getOptions: () => api.get('/surveillance-rules/options'),
+};
+
+export const alertApi = {
+  list: (params?: any) => api.get('/alerts', { params }),
+  getStats: () => api.get('/alerts/stats'),
+  get: (id: string) => api.get(`/alerts/${id}`),
+  create: (data: any) => api.post('/alerts', data),
+  update: (id: string, data: any) => api.put(`/alerts/${id}`, data),
+  assign: (id: string, data: any) => api.post(`/alerts/${id}/assign`, data),
+  resolve: (id: string, data: any) => api.post(`/alerts/${id}/resolve`, data),
+  escalate: (id: string, data: any) => api.post(`/alerts/${id}/escalate`, data),
+  addDisposal: (id: string, data: any) => api.post(`/alerts/${id}/disposals`, data),
+  getDisposals: (id: string) => api.get(`/alerts/${id}/disposals`),
+};
+
 export const caseMeetingApi = {
   list: (params?: any) => api.get('/case-meetings', { params }),
   getStats: () => api.get('/case-meetings/stats'),

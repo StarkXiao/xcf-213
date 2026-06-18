@@ -44,6 +44,8 @@ model Case {
   commandTasks CommandTask[]
   meetingMinutes CaseMeetingMinutes[]
   clueCheckFlows ClueCheckFlow[]
+  surveillanceRules SurveillanceRule[]
+  alerts AlertMessage[]
 }
 
 // 人员信息表
@@ -68,6 +70,7 @@ model Person {
   relationsAsObject  PersonRelation[] @relation("ObjectRelations")
   personTags   PersonTag[]
   commandTasks CommandTask[]
+  alerts AlertMessage[]
 }
 
 // 案件-人员关联表
@@ -130,6 +133,7 @@ model Clue {
   commandTasks CommandTask[]
   clueCheckFlows ClueCheckFlow[]
   meetingClues MeetingClue[]
+  alerts AlertMessage[]
 }
 
 // 线索-人员关联表
@@ -208,6 +212,7 @@ model Evidence {
   transfers          EvidenceTransfer[]
   commandTasks       CommandTask[]
   meetingEvidences   MeetingEvidence[]
+  alerts AlertMessage[]
 }
 
 // 证据流转类型枚举
@@ -832,4 +837,142 @@ model MeetingTodoItem {
   @@index([status])
   @@index([assigneeId])
   @@index([dueDate])
+}
+
+enum SurveillanceTargetType {
+  PERSON
+  LOCATION
+  EVIDENCE
+}
+
+enum SurveillanceRuleStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+enum AlertLevel {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AlertStatus {
+  PENDING
+  PROCESSING
+  RESOLVED
+  DISMISSED
+  ESCALATED
+}
+
+enum DisposalType {
+  VERIFY
+  MONITOR
+  INVESTIGATE
+  ASSIGN_TASK
+  DISMISS
+  ESCALATE
+  OTHER
+}
+
+model SurveillanceRule {
+  id              String                  @id @default(uuid())
+  ruleNumber      String                  @unique
+  name            String
+  description     String?
+  targetType      SurveillanceTargetType
+  targetIds       String?
+  conditions      String?
+  alertLevel      AlertLevel              @default(MEDIUM)
+  notifyChannels  String?
+  notifyUsers     String?
+  validFrom       DateTime?
+  validTo         DateTime?
+  status          SurveillanceRuleStatus  @default(ACTIVE)
+  caseId          String?
+  operatorId      String?
+  operatorName    String?
+  operatorDept    String?
+  triggerCount    Int                     @default(0)
+  lastTriggerTime DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  case            Case?                   @relation(fields: [caseId], references: [id])
+  alerts          AlertMessage[]
+
+  @@index([targetType])
+  @@index([status])
+  @@index([alertLevel])
+  @@index([caseId])
+  @@index([createdAt])
+}
+
+model AlertMessage {
+  id              String          @id @default(uuid())
+  alertNumber     String          @unique
+  ruleId          String?
+  title           String
+  content         String
+  targetType      SurveillanceTargetType
+  targetId        String?
+  targetName      String?
+  alertLevel      AlertLevel      @default(MEDIUM)
+  status          AlertStatus     @default(PENDING)
+  triggerSource   String?
+  triggerTime     DateTime        @default(now())
+  caseId          String?
+  clueId          String?
+  evidenceId      String?
+  personId        String?
+  location        String?
+  metadata        String?
+  assigneeId      String?
+  assigneeName    String?
+  assigneeDept    String?
+  resolveTime     DateTime?
+  resolveNote     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  rule            SurveillanceRule? @relation(fields: [ruleId], references: [id])
+  case            Case?           @relation(fields: [caseId], references: [id])
+  clue            Clue?           @relation(fields: [clueId], references: [id])
+  evidence        Evidence?       @relation(fields: [evidenceId], references: [id])
+  person          Person?         @relation(fields: [personId], references: [id])
+  disposals       AlertDisposal[]
+
+  @@index([ruleId])
+  @@index([status])
+  @@index([alertLevel])
+  @@index([targetType])
+  @@index([caseId])
+  @@index([personId])
+  @@index([triggerTime])
+  @@index([createdAt])
+}
+
+model AlertDisposal {
+  id              String          @id @default(uuid())
+  alertId         String
+  disposalType    DisposalType
+  title           String
+  description     String?
+  result          String?
+  operatorId      String?
+  operatorName    String?
+  operatorDept    String?
+  disposalTime    DateTime        @default(now())
+  nextAction      String?
+  taskId          String?
+  attachments     String?
+  createdAt       DateTime        @default(now())
+
+  alert           AlertMessage    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([disposalType])
+  @@index([operatorId])
+  @@index([disposalTime])
 }
