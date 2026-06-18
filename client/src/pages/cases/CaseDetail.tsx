@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar, Checkbox } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined, ExportOutlined, DownloadOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { caseApi, personApi, clueApi, evidenceApi } from '../../services/api';
@@ -88,6 +88,14 @@ export default function CaseDetail() {
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'overview');
   const [thematicData, setThematicData] = useState<any>(null);
   const [thematicLoading, setThematicLoading] = useState(false);
+  const [exportModal, setExportModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    includeClues: true,
+    includeEvidences: true,
+    includePersons: true,
+    includeRelations: true,
+  });
 
   useEffect(() => {
     if (id) {
@@ -146,6 +154,36 @@ export default function CaseDetail() {
     setActiveTab(key);
     if (key === 'thematic' && !thematicData) {
       loadThematicView();
+    }
+  };
+
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const res = await caseApi.exportArchive(id!, exportOptions);
+      const blob = new Blob([res.data], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const contentDisposition = res.headers['content-disposition'];
+      let fileName = `${caseData.caseNumber}_${caseData.title}_归档_${new Date().toISOString().slice(0, 10)}.json`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+        if (match) {
+          fileName = decodeURIComponent(match[1].replace(/["']/g, ''));
+        }
+      }
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      message.success('归档导出成功');
+      setExportModal(false);
+    } catch (error) {
+      message.error('导出失败');
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -1182,6 +1220,7 @@ export default function CaseDetail() {
           <Tag color={statusColors[caseData.status]}>{caseData.status}</Tag>
         </Space>
         <Space>
+          <Button icon={<ExportOutlined />} onClick={() => setExportModal(true)}>归档导出</Button>
           <Button icon={<EditOutlined />} onClick={() => navigate(`/cases/${id}/edit`)}>编辑</Button>
           <Popconfirm title="确定删除该案件？" onConfirm={handleDelete}>
             <Button danger icon={<DeleteOutlined />}>删除</Button>
@@ -1227,6 +1266,84 @@ export default function CaseDetail() {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <ExportOutlined style={{ color: '#1677ff' }} />
+            <span>案件归档导出</span>
+          </Space>
+        }
+        open={exportModal}
+        onCancel={() => setExportModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setExportModal(false)}>取消</Button>,
+          <Button key="export" type="primary" icon={<DownloadOutlined />} loading={exportLoading} onClick={handleExport}>确认导出</Button>,
+        ]}
+        width={520}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            type="info"
+            showIcon
+            message="按案件归档导出，将自动带出关联线索、证据清单、人员关系摘要"
+            style={{ marginBottom: 12 }}
+          />
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label="案件编号">{caseData.caseNumber}</Descriptions.Item>
+            <Descriptions.Item label="案件标题">{caseData.title}</Descriptions.Item>
+            <Descriptions.Item label="案件状态"><Tag color={statusColors[caseData.status]}>{caseData.status}</Tag></Descriptions.Item>
+          </Descriptions>
+        </div>
+
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>导出内容选择：</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Checkbox
+            checked={exportOptions.includeClues}
+            onChange={(e) => setExportOptions(prev => ({ ...prev, includeClues: e.target.checked }))}
+          >
+            <Space>
+              <SearchOutlined style={{ color: '#fa8c16' }} />
+              <span>关联线索</span>
+              <Tag color="orange">{caseData.clues?.length || 0} 条</Tag>
+            </Space>
+          </Checkbox>
+          <Checkbox
+            checked={exportOptions.includeEvidences}
+            onChange={(e) => setExportOptions(prev => ({ ...prev, includeEvidences: e.target.checked }))}
+          >
+            <Space>
+              <PaperClipOutlined style={{ color: '#722ed1' }} />
+              <span>证据清单</span>
+              <Tag color="purple">{caseData.evidences?.length || 0} 份</Tag>
+            </Space>
+          </Checkbox>
+          <Checkbox
+            checked={exportOptions.includePersons}
+            onChange={(e) => setExportOptions(prev => ({ ...prev, includePersons: e.target.checked }))}
+          >
+            <Space>
+              <TeamOutlined style={{ color: '#52c41a' }} />
+              <span>涉案人员</span>
+              <Tag color="green">{caseData.casePersons?.length || 0} 人</Tag>
+            </Space>
+          </Checkbox>
+          <Checkbox
+            checked={exportOptions.includeRelations}
+            onChange={(e) => setExportOptions(prev => ({ ...prev, includeRelations: e.target.checked }))}
+          >
+            <Space>
+              <ShareAltOutlined style={{ color: '#1677ff' }} />
+              <span>人员关系摘要</span>
+              <Tag color="blue">{relations.edges?.length || 0} 条关系</Tag>
+            </Space>
+          </Checkbox>
+        </div>
+
+        <div style={{ marginTop: 16, padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: 12, color: '#666' }}>
+          导出格式为 JSON 文件，包含完整的案件信息及所选关联数据。文件可用于备份、归档或数据迁移。
+        </div>
       </Modal>
     </div>
   );

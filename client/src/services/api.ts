@@ -26,6 +26,16 @@ export const caseApi = {
   getPersons: (id: string) => api.get(`/cases/${id}/persons`),
   getRelations: (id: string) => api.get(`/cases/${id}/relations`),
   getThematicView: (id: string) => api.get(`/cases/${id}/thematic-view`),
+  exportArchive: (id: string, params?: { includeClues?: boolean; includeEvidences?: boolean; includePersons?: boolean; includeRelations?: boolean }) =>
+    api.get(`/cases/${id}/export`, {
+      params: {
+        includeClues: params?.includeClues ?? true,
+        includeEvidences: params?.includeEvidences ?? true,
+        includePersons: params?.includePersons ?? true,
+        includeRelations: params?.includeRelations ?? true,
+      },
+      responseType: 'blob',
+    }),
 };
 
 export const clueApi = {

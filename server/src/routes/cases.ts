@@ -384,6 +384,217 @@ export default async function (fastify: FastifyInstance) {
     return { nodes, edges };
   });
 
+  fastify.get('/:id/export', async (request: FastifyRequest<{ Params: { id: string }; Querystring: { includeClues?: string; includeEvidences?: string; includePersons?: string; includeRelations?: string } }>, reply) => {
+    const { includeClues = 'true', includeEvidences = 'true', includePersons = 'true', includeRelations = 'true' } = request.query;
+
+    const caseItem = await prisma.case.findUnique({
+      where: { id: request.params.id },
+      include: {
+        clues: {
+          include: {
+            cluePersons: { include: { person: true } },
+            verifications: { orderBy: { createdAt: 'desc' } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        evidences: {
+          orderBy: { createdAt: 'desc' },
+        },
+        casePersons: {
+          include: { person: { include: { personTags: { include: { tag: true } } } } },
+          orderBy: { createdAt: 'desc' },
+        },
+        sourceRelations: {
+          include: {
+            targetCase: { select: { id: true, caseNumber: true, title: true, caseType: true, status: true } },
+          },
+        },
+        targetRelations: {
+          include: {
+            sourceCase: { select: { id: true, caseNumber: true, title: true, caseType: true, status: true } },
+          },
+        },
+      },
+    });
+
+    if (!caseItem) {
+      reply.status(404).send({ error: '案件不存在' });
+      return;
+    }
+
+    const personIds = caseItem.casePersons.map((cp: any) => cp.personId);
+    const personRelations = await prisma.personRelation.findMany({
+      where: {
+        OR: [
+          { caseId: request.params.id },
+          { subjectId: { in: personIds } },
+          { objectId: { in: personIds } },
+        ],
+      },
+      include: {
+        subjectPerson: { select: { id: true, name: true, personType: true } },
+        objectPerson: { select: { id: true, name: true, personType: true } },
+      },
+    });
+
+    const formatDate = (d: any) => d ? new Date(d).toISOString() : null;
+
+    const archive: any = {
+      exportInfo: {
+        exportedAt: new Date().toISOString(),
+        format: 'case-archive-v1',
+        caseId: caseItem.id,
+        caseNumber: caseItem.caseNumber,
+      },
+      case: {
+        id: caseItem.id,
+        caseNumber: caseItem.caseNumber,
+        title: caseItem.title,
+        description: caseItem.description,
+        caseType: caseItem.caseType,
+        status: caseItem.status,
+        priority: caseItem.priority,
+        location: caseItem.location,
+        occurTime: formatDate(caseItem.occurTime),
+        reportTime: formatDate(caseItem.reportTime),
+        caseManager: caseItem.caseManager,
+        department: caseItem.department,
+        summary: caseItem.summary,
+        caseAnalysis: caseItem.caseAnalysis,
+        personAnalysis: caseItem.personAnalysis,
+        evidenceAnalysis: caseItem.evidenceAnalysis,
+        conclusion: caseItem.conclusion,
+        createdAt: formatDate(caseItem.createdAt),
+        updatedAt: formatDate(caseItem.updatedAt),
+      },
+      relatedCases: [
+        ...caseItem.sourceRelations.map((r: any) => ({
+          relationType: r.relationType,
+          description: r.description,
+          case: r.targetCase,
+        })),
+        ...caseItem.targetRelations.map((r: any) => ({
+          relationType: r.relationType,
+          description: r.description,
+          case: r.sourceCase,
+        })),
+      ],
+    };
+
+    if (includeClues === 'true') {
+      archive.clues = caseItem.clues.map((clue: any) => ({
+        id: clue.id,
+        clueNumber: clue.clueNumber,
+        title: clue.title,
+        content: clue.content,
+        clueType: clue.clueType,
+        source: clue.source,
+        credibility: clue.credibility,
+        importance: clue.importance,
+        status: clue.status,
+        location: clue.location,
+        findTime: formatDate(clue.findTime),
+        informant: clue.informant,
+        handler: clue.handler,
+        note: clue.note,
+        createdAt: formatDate(clue.createdAt),
+        updatedAt: formatDate(clue.updatedAt),
+        relatedPersons: clue.cluePersons?.map((cp: any) => ({
+          name: cp.person?.name,
+          personType: cp.person?.personType,
+          relation: cp.relation,
+        })) || [],
+        verifications: clue.verifications?.map((v: any) => ({
+          result: v.result,
+          handler: v.handler,
+          handleTime: formatDate(v.handleTime),
+          note: v.note,
+          createdAt: formatDate(v.createdAt),
+        })) || [],
+      }));
+    }
+
+    if (includeEvidences === 'true') {
+      archive.evidences = caseItem.evidences.map((ev: any) => ({
+        id: ev.id,
+        evidenceNumber: ev.evidenceNumber,
+        name: ev.name,
+        description: ev.description,
+        type: ev.type,
+        fileName: ev.fileName,
+        fileSize: ev.fileSize,
+        mimeType: ev.mimeType,
+        hash: ev.hash,
+        collectionMethod: ev.collectionMethod,
+        collector: ev.collector,
+        collectTime: formatDate(ev.collectTime),
+        location: ev.location,
+        status: ev.status,
+        borrowStatus: ev.borrowStatus,
+        note: ev.note,
+        createdAt: formatDate(ev.createdAt),
+        updatedAt: formatDate(ev.updatedAt),
+      }));
+    }
+
+    if (includePersons === 'true') {
+      archive.persons = caseItem.casePersons.map((cp: any) => ({
+        personId: cp.personId,
+        name: cp.person?.name,
+        gender: cp.person?.gender,
+        age: cp.person?.age,
+        idCard: cp.person?.idCard,
+        phone: cp.person?.phone,
+        address: cp.person?.address,
+        occupation: cp.person?.occupation,
+        personType: cp.person?.personType,
+        role: cp.role,
+        note: cp.note,
+        tags: cp.person?.personTags?.map((pt: any) => pt.tag?.name).filter(Boolean) || [],
+      }));
+    }
+
+    if (includeRelations === 'true') {
+      archive.personRelations = personRelations.map((r: any) => ({
+        subject: {
+          id: r.subjectPerson?.id,
+          name: r.subjectPerson?.name,
+          personType: r.subjectPerson?.personType,
+        },
+        object: {
+          id: r.objectPerson?.id,
+          name: r.objectPerson?.name,
+          personType: r.objectPerson?.personType,
+        },
+        relationType: r.relationType,
+        description: r.description,
+      }));
+
+      const relationSummary: any = {};
+      personRelations.forEach((r: any) => {
+        const type = r.relationType;
+        if (!relationSummary[type]) {
+          relationSummary[type] = [];
+        }
+        relationSummary[type].push(`${r.subjectPerson?.name} → ${r.objectPerson?.name}`);
+      });
+      archive.relationSummary = Object.entries(relationSummary).map(([type, pairs]) => ({
+        relationType: type,
+        count: (pairs as string[]).length,
+        details: pairs,
+      }));
+    }
+
+    const exportData = JSON.stringify(archive, null, 2);
+    const fileName = `${caseItem.caseNumber}_${caseItem.title}_归档_${new Date().toISOString().slice(0, 10)}.json`;
+
+    reply.header('Content-Type', 'application/json; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    reply.header('Content-Length', Buffer.byteLength(exportData, 'utf-8'));
+
+    return reply.send(exportData);
+  });
+
   fastify.get('/:id/thematic-view', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const caseItem = await prisma.case.findUnique({
       where: { id: request.params.id },
