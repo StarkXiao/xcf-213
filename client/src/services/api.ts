@@ -315,4 +315,25 @@ export const timelineApi = {
     api.get(`/timelines/aggregate/${targetType}/${targetId}`),
 };
 
+export const approvalApi = {
+  getOptions: () => api.get('/approvals/options'),
+  listFlows: (params?: any) => api.get('/approvals/flows', { params }),
+  getFlow: (id: string) => api.get(`/approvals/flows/${id}`),
+  createFlow: (data: any) => api.post('/approvals/flows', data),
+  updateFlow: (id: string, data: any) => api.put(`/approvals/flows/${id}`, data),
+  deleteFlow: (id: string) => api.delete(`/approvals/flows/${id}`),
+  getDefaultFlow: (category: string) => api.get(`/approvals/default/${category}`),
+  listInstances: (params?: any) => api.get('/approvals/instances', { params }),
+  getInstanceStats: () => api.get('/approvals/instances/stats'),
+  getInstance: (id: string) => api.get(`/approvals/instances/${id}`),
+  submitInstance: (data: any) => api.post('/approvals/instances', data),
+  approveInstance: (id: string, data: any) => api.post(`/approvals/instances/${id}/approve`, data),
+  rejectInstance: (id: string, data: any) => api.post(`/approvals/instances/${id}/reject`, data),
+  rollbackInstance: (id: string, data: any) => api.post(`/approvals/instances/${id}/rollback`, data),
+  cancelInstance: (id: string, data: any) => api.post(`/approvals/instances/${id}/cancel`, data),
+  urgeInstance: (id: string, data: any) => api.post(`/approvals/instances/${id}/urge`, data),
+  getByTarget: (targetType: string, targetId: string, params?: any) =>
+    api.get(`/approvals/instances/target/${targetType}/${targetId}`, { params }),
+};
+
 export default api;

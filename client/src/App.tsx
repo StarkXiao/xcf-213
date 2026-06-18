@@ -34,6 +34,8 @@ import AlertDetail from './pages/surveillance/AlertDetail';
 import ForensicFileList from './pages/forensics/ForensicFileList';
 import ForensicFileDetail from './pages/forensics/ForensicFileDetail';
 import ForensicImport from './pages/forensics/ForensicImport';
+import ApprovalList from './pages/approvals/ApprovalList';
+import ApprovalDetail from './pages/approvals/ApprovalDetail';
 
 const { Content } = Layout;
 
@@ -97,6 +99,9 @@ function App() {
             <Route path="/forensics" element={<ForensicFileList />} />
             <Route path="/forensics/import" element={<ForensicImport />} />
             <Route path="/forensics/:id" element={<ForensicFileDetail />} />
+
+            <Route path="/approvals" element={<ApprovalList />} />
+            <Route path="/approvals/:id" element={<ApprovalDetail />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

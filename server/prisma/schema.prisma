@@ -1320,3 +1320,143 @@ model TimelineEvent {
   @@index([targetType, clueId])
   @@index([createdAt])
 }
+
+enum ApprovalCategory {
+  CASE_FILING
+  CLUE_ADOPT
+  EVIDENCE_CHECKOUT
+  EVIDENCE_DESTROY
+  CASE_TRANSFER
+  CASE_CLOSE
+  FORENSIC_IMPORT
+  OTHER
+}
+
+enum ApprovalStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  ROLLED_BACK
+  CANCELLED
+}
+
+enum ApprovalNodeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+model ApprovalFlow {
+  id           String            @id @default(uuid())
+  flowNumber   String            @unique
+  name         String
+  category     ApprovalCategory
+  description  String?
+  isDefault    Boolean           @default(false)
+  status       String            @default("启用")
+  nodes        ApprovalFlowNode[]
+  instances    ApprovalInstance[]
+  operatorId   String?
+  operatorName String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ApprovalFlowNode {
+  id           String        @id @default(uuid())
+  flowId       String
+  level        Int
+  name         String
+  approverRole String?
+  approverIds  String?
+  description  String?
+  isRequired   Boolean       @default(true)
+  flow         ApprovalFlow  @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  records      ApprovalRecord[]
+
+  @@index([flowId])
+  @@index([level])
+}
+
+model ApprovalInstance {
+  id              String           @id @default(uuid())
+  instanceNumber  String           @unique
+  flowId          String
+  category        ApprovalCategory
+  title           String
+  description     String?
+  status          ApprovalStatus   @default(PENDING)
+  currentLevel    Int              @default(1)
+  totalLevels     Int
+
+  targetType      String
+  targetId        String
+  targetNumber    String?
+  targetName      String?
+
+  applicantId     String?
+  applicantName   String?
+  applicantDept   String?
+  applyTime       DateTime         @default(now())
+  applyReason     String?
+
+  urgentReason    String?
+  isUrgent        Boolean          @default(false)
+
+  completedTime   DateTime?
+  completedBy     String?
+  completedByName String?
+
+  caseId          String?
+  clueId          String?
+  evidenceId      String?
+
+  flow            ApprovalFlow     @relation(fields: [flowId], references: [id])
+  records         ApprovalRecord[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([flowId])
+  @@index([category])
+  @@index([status])
+  @@index([targetType, targetId])
+  @@index([caseId])
+  @@index([clueId])
+  @@index([evidenceId])
+  @@index([applicantName])
+  @@index([createdAt])
+}
+
+model ApprovalRecord {
+  id            String              @id @default(uuid())
+  instanceId    String
+  nodeId        String?
+  level         Int
+  action        String
+  opinion       String?
+  operatorId    String?
+  operatorName  String?
+  operatorDept  String?
+  operatorRole  String?
+  actionTime    DateTime            @default(now())
+  beforeStatus  String?
+  afterStatus   String?
+  attachmentIds String?
+  remark        String?
+
+  instance      ApprovalInstance    @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  node          ApprovalFlowNode?   @relation(fields: [nodeId], references: [id])
+
+  @@index([instanceId])
+  @@index([level])
+  @@index([action])
+  @@index([operatorName])
+  @@index([actionTime])
+}

@@ -17,6 +17,7 @@ import {
   SafetyCertificateOutlined,
   BellOutlined,
   ScanOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -86,6 +87,11 @@ const menuItems = [
     key: '/evidence-transfers',
     icon: <SwapOutlined />,
     label: '证据流转与保全',
+  },
+  {
+    key: '/approvals',
+    icon: <AuditOutlined />,
+    label: '多级审批',
   },
   {
     key: '/forensics',
