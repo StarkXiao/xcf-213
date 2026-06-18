@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import prisma from '../lib/prisma';
+import { checkPersonRules } from '../lib/ruleEngine';
 
 interface PersonQuery {
   page?: number;
@@ -222,6 +223,9 @@ export default async function (fastify: FastifyInstance) {
         },
         include: { personTags: { include: { tag: true } } },
       });
+
+      checkPersonRules(person.id, person.name, 'CREATE').catch(() => {});
+
       return {
         ...person,
         tags: person.personTags.map((pt: any) => pt.tag),
@@ -252,6 +256,9 @@ export default async function (fastify: FastifyInstance) {
         data: personData,
         include: { personTags: { include: { tag: true } } },
       });
+
+      checkPersonRules(person.id, person.name, 'UPDATE').catch(() => {});
+
       return {
         ...person,
         tags: person.personTags.map((pt: any) => pt.tag),

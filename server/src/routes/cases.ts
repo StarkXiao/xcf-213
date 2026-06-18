@@ -12,6 +12,7 @@ import {
   getRequestMeta,
   extractOperator,
 } from '../lib/operationLog';
+import { checkLocationRules } from '../lib/ruleEngine';
 
 interface CaseQuery {
   page?: number;
@@ -278,6 +279,15 @@ export default async function (fastify: FastifyInstance) {
       }
     );
 
+    if (caseItem.location) {
+      checkLocationRules(caseItem.location, {
+        type: 'CASE',
+        id: caseItem.id,
+        name: caseItem.title,
+        number: caseItem.caseNumber,
+      }).catch(() => {});
+    }
+
     return caseItem;
   });
 
@@ -322,6 +332,15 @@ export default async function (fastify: FastifyInstance) {
         },
         caseItem.caseManager
       );
+
+      if (caseItem.location && caseItem.location !== beforeCase?.location) {
+        checkLocationRules(caseItem.location, {
+          type: 'CASE',
+          id: caseItem.id,
+          name: caseItem.title,
+          number: caseItem.caseNumber,
+        }).catch(() => {});
+      }
 
       return caseItem;
     } catch (error) {

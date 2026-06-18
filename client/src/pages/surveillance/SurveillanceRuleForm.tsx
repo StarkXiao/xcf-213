@@ -59,6 +59,7 @@ export default function SurveillanceRuleForm() {
       const data = res.data;
       form.setFieldsValue({
         ...data,
+        locationKeywords: data.locationKeywords || undefined,
         validFrom: data.validFrom ? dayjs(data.validFrom) : undefined,
         validTo: data.validTo ? dayjs(data.validTo) : undefined,
       });
@@ -100,7 +101,8 @@ export default function SurveillanceRuleForm() {
     try {
       const submitData: any = {
         ...values,
-        targetIds: selectedTargetIds,
+        targetIds: values.targetType !== 'LOCATION' ? selectedTargetIds : [],
+        locationKeywords: values.targetType === 'LOCATION' ? values.locationKeywords : null,
         validFrom: values.validFrom ? values.validFrom.toISOString() : null,
         validTo: values.validTo ? values.validTo.toISOString() : null,
         operatorName: '当前用户',

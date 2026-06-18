@@ -152,6 +152,13 @@ export default function SurveillanceRuleList() {
                 <span style={{ fontSize: 12, color: '#999' }}>
                   {record.ruleNumber}
                 </span>
+                {record.targetType === 'LOCATION' && record.locationKeywords && (
+                  <span style={{ fontSize: 12, color: '#722ed1' }} title={record.locationKeywords}>
+                    {record.locationKeywords.length > 20
+                      ? record.locationKeywords.substring(0, 20) + '...'
+                      : record.locationKeywords}
+                  </span>
+                )}
               </Space>
             </div>
           </Space>

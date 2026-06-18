@@ -17,6 +17,7 @@ interface SurveillanceRuleCreate {
   description?: string;
   targetType: any;
   targetIds?: any;
+  locationKeywords?: string;
   conditions?: any;
   alertLevel?: any;
   notifyChannels?: any;
@@ -176,6 +177,7 @@ export default async function (fastify: FastifyInstance) {
         description,
         targetType,
         targetIds,
+        locationKeywords,
         conditions,
         alertLevel,
         notifyChannels,
@@ -198,6 +200,7 @@ export default async function (fastify: FastifyInstance) {
           description,
           targetType,
           targetIds: targetIds ? JSON.stringify(targetIds) : null,
+          locationKeywords: locationKeywords || null,
           conditions: conditions ? JSON.stringify(conditions) : null,
           alertLevel,
           notifyChannels: notifyChannels ? JSON.stringify(notifyChannels) : null,
@@ -238,6 +241,7 @@ export default async function (fastify: FastifyInstance) {
         description,
         targetType,
         targetIds,
+        locationKeywords,
         conditions,
         alertLevel,
         notifyChannels,
@@ -258,6 +262,7 @@ export default async function (fastify: FastifyInstance) {
           description,
           targetType,
           targetIds: targetIds ? JSON.stringify(targetIds) : null,
+          locationKeywords: locationKeywords || null,
           conditions: conditions ? JSON.stringify(conditions) : null,
           alertLevel,
           notifyChannels: notifyChannels ? JSON.stringify(notifyChannels) : null,

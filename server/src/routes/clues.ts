@@ -12,6 +12,7 @@ import {
   getRequestMeta,
   extractOperator,
 } from '../lib/operationLog';
+import { checkLocationRules } from '../lib/ruleEngine';
 
 interface ClueQuery {
   page?: number;
@@ -162,6 +163,16 @@ export default async function (fastify: FastifyInstance) {
       );
     }
 
+    if (clue.location) {
+      checkLocationRules(clue.location, {
+        type: 'CLUE',
+        id: clue.id,
+        name: clue.title,
+        number: clue.clueNumber,
+        caseId: clue.caseId || undefined,
+      }).catch(() => {});
+    }
+
     return clue;
   });
 
@@ -245,6 +256,16 @@ export default async function (fastify: FastifyInstance) {
             }
           );
         }
+      }
+
+      if (clue.location && clue.location !== beforeClue?.location) {
+        checkLocationRules(clue.location, {
+          type: 'CLUE',
+          id: clue.id,
+          name: clue.title,
+          number: clue.clueNumber,
+          caseId: clue.caseId || undefined,
+        }).catch(() => {});
       }
 
       return clue;

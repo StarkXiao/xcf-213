@@ -16,6 +16,7 @@ import {
   getRequestMeta,
   extractOperator,
 } from '../lib/operationLog';
+import { checkEvidenceRules, checkLocationRules } from '../lib/ruleEngine';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -342,6 +343,23 @@ export default async function (fastify: FastifyInstance) {
       );
     }
 
+    checkEvidenceRules(evidence.id, evidence.name, evidence.evidenceNumber, 'CREATE', {
+      caseId: evidence.caseId || undefined,
+      clueId: evidence.clueId || undefined,
+      location: evidence.location || undefined,
+    }).catch(() => {});
+
+    if (evidence.location) {
+      checkLocationRules(evidence.location, {
+        type: 'EVIDENCE',
+        id: evidence.id,
+        name: evidence.name,
+        number: evidence.evidenceNumber,
+        caseId: evidence.caseId || undefined,
+        clueId: evidence.clueId || undefined,
+      }).catch(() => {});
+    }
+
     return transformEvidence(evidence);
   });
 
@@ -447,6 +465,23 @@ export default async function (fastify: FastifyInstance) {
       );
     }
 
+    checkEvidenceRules(evidence.id, evidence.name, evidence.evidenceNumber, 'CREATE', {
+      caseId: evidence.caseId || undefined,
+      clueId: evidence.clueId || undefined,
+      location: evidence.location || undefined,
+    }).catch(() => {});
+
+    if (evidence.location) {
+      checkLocationRules(evidence.location, {
+        type: 'EVIDENCE',
+        id: evidence.id,
+        name: evidence.name,
+        number: evidence.evidenceNumber,
+        caseId: evidence.caseId || undefined,
+        clueId: evidence.clueId || undefined,
+      }).catch(() => {});
+    }
+
     return transformEvidence(evidence);
   });
 
@@ -549,6 +584,24 @@ export default async function (fastify: FastifyInstance) {
             }
           );
         }
+      }
+
+      const statusChanged = beforeEvidence?.status !== evidence.status;
+      checkEvidenceRules(evidence.id, evidence.name, evidence.evidenceNumber, statusChanged ? 'STATUS_CHANGE' : 'UPDATE', {
+        caseId: evidence.caseId || undefined,
+        clueId: evidence.clueId || undefined,
+        location: evidence.location || undefined,
+      }).catch(() => {});
+
+      if (evidence.location && evidence.location !== beforeEvidence?.location) {
+        checkLocationRules(evidence.location, {
+          type: 'EVIDENCE',
+          id: evidence.id,
+          name: evidence.name,
+          number: evidence.evidenceNumber,
+          caseId: evidence.caseId || undefined,
+          clueId: evidence.clueId || undefined,
+        }).catch(() => {});
       }
 
       return transformEvidence(evidence);
@@ -753,6 +806,12 @@ export default async function (fastify: FastifyInstance) {
         ...getRequestMeta(request),
       });
 
+      checkEvidenceRules(request.params.id, updatedEvidence.name, updatedEvidence.evidenceNumber, 'BORROW', {
+        caseId: data.caseId || evidence.caseId || undefined,
+        clueId: data.clueId || evidence.clueId || undefined,
+        location: evidence.location || undefined,
+      }).catch(() => {});
+
       return borrowRecord;
     } catch (error) {
       reply.status(400).send({ error: '借阅登记失败' });
@@ -833,6 +892,12 @@ export default async function (fastify: FastifyInstance) {
         },
         ...getRequestMeta(request),
       });
+
+      checkEvidenceRules(request.params.id, evidence.name, evidence.evidenceNumber, 'RETURN', {
+        caseId: evidence.caseId || undefined,
+        clueId: evidence.clueId || undefined,
+        location: evidence.location || undefined,
+      }).catch(() => {});
 
       return borrowRecord;
     } catch (error) {
