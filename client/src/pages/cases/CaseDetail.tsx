@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar, Checkbox, Empty } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined, ExportOutlined, DownloadOutlined, CoffeeOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined, ExportOutlined, DownloadOutlined, CoffeeOutlined, ScanOutlined, DisconnectOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
-import { caseApi, personApi, clueApi, evidenceApi, caseMeetingApi } from '../../services/api';
+import { caseApi, personApi, clueApi, evidenceApi, caseMeetingApi, forensicApi } from '../../services/api';
 
 const statusColors: Record<string, string> = {
   '待立案': 'default',
@@ -56,6 +56,35 @@ const evidenceTypeColors: Record<string, string> = {
   '其他': 'default',
 };
 
+const forensicFileTypeLabels: Record<string, { label: string; color: string }> = {
+  DOCUMENT: { label: '文档', color: 'blue' },
+  IMAGE: { label: '图片', color: 'green' },
+  VIDEO: { label: '视频', color: 'purple' },
+  AUDIO: { label: '音频', color: 'orange' },
+  EMAIL: { label: '邮件', color: 'cyan' },
+  DATABASE: { label: '数据库', color: 'magenta' },
+  LOG: { label: '日志', color: 'geekblue' },
+  ARCHIVE: { label: '压缩包', color: 'volcano' },
+  CODE: { label: '代码', color: 'lime' },
+  SYSTEM_FILE: { label: '系统文件', color: 'red' },
+  OTHER: { label: '其他', color: 'default' },
+};
+
+const forensicIntegrityLabels: Record<string, { label: string; color: string }> = {
+  VERIFIED: { label: '校验通过', color: 'success' },
+  CORRUPTED: { label: '数据损坏', color: 'error' },
+  PENDING: { label: '待校验', color: 'warning' },
+  NOT_APPLICABLE: { label: '不适用', color: 'default' },
+};
+
+const formatFileSize = (bytes: number) => {
+  if (!bytes) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+};
+
 const investigationStages = [
   { key: 'report', title: '接报案阶段', description: '接到报案，初步了解案件情况', icon: FileSearchOutlined },
   { key: 'filing', title: '立案审查阶段', description: '审查案件是否符合立案条件', icon: FileTextOutlined },
@@ -98,6 +127,15 @@ export default function CaseDetail() {
   });
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingsLoading, setMeetingsLoading] = useState(false);
+  const [forensicFiles, setForensicFiles] = useState<any[]>([]);
+  const [forensicLoading, setForensicLoading] = useState(false);
+  const [forensicTotal, setForensicTotal] = useState(0);
+  const [forensicPage, setForensicPage] = useState(1);
+  const [forensicPageSize, setForensicPageSize] = useState(10);
+  const [bindForensicModal, setBindForensicModal] = useState(false);
+  const [bindForensicForm] = Form.useForm();
+  const [allForensicFiles, setAllForensicFiles] = useState<any[]>([]);
+  const [allForensicLoading, setAllForensicLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -167,6 +205,65 @@ export default function CaseDetail() {
     }
   };
 
+  const loadForensicFiles = async (page = 1, pageSize = 10) => {
+    setForensicLoading(true);
+    try {
+      const res = await forensicApi.list({ caseId: id, page, pageSize });
+      setForensicFiles(res.data.items || []);
+      setForensicTotal(res.data.total || 0);
+      setForensicPage(page);
+      setForensicPageSize(pageSize);
+    } catch (error) {
+      console.error('Failed to load forensic files:', error);
+    } finally {
+      setForensicLoading(false);
+    }
+  };
+
+  const loadAllForensicFiles = async () => {
+    setAllForensicLoading(true);
+    try {
+      const res = await forensicApi.list({ pageSize: 1000 });
+      setAllForensicFiles(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load all forensic files:', error);
+    } finally {
+      setAllForensicLoading(false);
+    }
+  };
+
+  const handleBindForensic = async (values: any) => {
+    try {
+      await forensicApi.bindCase({
+        forensicFileId: values.forensicFileId,
+        caseId: id!,
+        relationType: values.relationType,
+        description: values.description,
+      });
+      message.success('绑定取证文件成功');
+      setBindForensicModal(false);
+      bindForensicForm.resetFields();
+      loadForensicFiles(forensicPage, forensicPageSize);
+      loadCaseData();
+    } catch (error) {
+      message.error('绑定取证文件失败');
+    }
+  };
+
+  const handleUnbindForensic = async (forensicFileId: string) => {
+    try {
+      await forensicApi.unbindCase({
+        forensicFileId,
+        caseId: id!,
+      });
+      message.success('解绑取证文件成功');
+      loadForensicFiles(forensicPage, forensicPageSize);
+      loadCaseData();
+    } catch (error) {
+      message.error('解绑取证文件失败');
+    }
+  };
+
   const handleTabChange = (key: string) => {
     setActiveTab(key);
     if (key === 'thematic' && !thematicData) {
@@ -174,6 +271,9 @@ export default function CaseDetail() {
     }
     if (key === 'meetings') {
       loadMeetings();
+    }
+    if (key === 'forensics') {
+      loadForensicFiles();
     }
   };
 
@@ -670,6 +770,144 @@ export default function CaseDetail() {
               </List.Item>
             )}
           />
+        </div>
+      ),
+    },
+    {
+      key: 'forensics',
+      label: `电子数据取证 (${forensicTotal})`,
+      icon: <ScanOutlined />,
+      children: (
+        <div>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: '#666', fontSize: 13 }}>
+              共 {forensicTotal} 个取证文件
+            </div>
+            <Space>
+              <Button
+                icon={<PlusOutlined />}
+                type="primary"
+                onClick={() => {
+                  bindForensicForm.resetFields();
+                  loadAllForensicFiles();
+                  setBindForensicModal(true);
+                }}
+              >
+                关联取证文件
+              </Button>
+              <Button
+                icon={<ScanOutlined />}
+                onClick={() => navigate('/forensics/import')}
+              >
+                去批量导入
+              </Button>
+            </Space>
+          </div>
+          <Card loading={forensicLoading} size="small">
+            <Table
+              dataSource={forensicFiles}
+              rowKey="id"
+              size="small"
+              pagination={{
+                current: forensicPage,
+                pageSize: forensicPageSize,
+                total: forensicTotal,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total) => `共 ${total} 条`,
+                onChange: (page, pageSize) => loadForensicFiles(page, pageSize),
+              }}
+              columns={[
+                {
+                  title: '取证编号',
+                  dataIndex: 'forensicNumber',
+                  key: 'forensicNumber',
+                  width: 160,
+                  render: (v: string, record: any) => (
+                    <a onClick={() => navigate(`/forensics/${record.id}`)} style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                      {v}
+                    </a>
+                  ),
+                },
+                {
+                  title: '文件名',
+                  dataIndex: 'fileName',
+                  key: 'fileName',
+                  ellipsis: true,
+                  render: (v: string, record: any) => (
+                    <Space>
+                      <span>{v}</span>
+                      {forensicFileTypeLabels[record.fileType] && (
+                        <Tag color={forensicFileTypeLabels[record.fileType].color}>
+                          {forensicFileTypeLabels[record.fileType].label}
+                        </Tag>
+                      )}
+                    </Space>
+                  ),
+                },
+                {
+                  title: '文件大小',
+                  dataIndex: 'fileSize',
+                  key: 'fileSize',
+                  width: 100,
+                  render: (v: number) => formatFileSize(v),
+                },
+                {
+                  title: '完整性',
+                  dataIndex: 'integrityStatus',
+                  key: 'integrityStatus',
+                  width: 100,
+                  render: (status: string) => {
+                    const info = forensicIntegrityLabels[status] || forensicIntegrityLabels.PENDING;
+                    return <Tag color={info.color}>{info.label}</Tag>;
+                  },
+                },
+                {
+                  title: 'MD5',
+                  dataIndex: 'md5Hash',
+                  key: 'md5Hash',
+                  width: 140,
+                  ellipsis: true,
+                  render: (v: string) => v ? (
+                    <code style={{ fontSize: 11, color: '#52c41a' }}>{v.substring(0, 16)}...</code>
+                  ) : '-',
+                },
+                {
+                  title: '关联类型',
+                  key: 'relationType',
+                  width: 120,
+                  render: (_: any, record: any) => {
+                    const rel = record.caseRelations?.find((r: any) => r.caseId === id);
+                    return rel?.relationType ? <Tag>{rel.relationType}</Tag> : '-';
+                  },
+                },
+                {
+                  title: '创建时间',
+                  dataIndex: 'createdAt',
+                  key: 'createdAt',
+                  width: 150,
+                  render: (v: string) => moment(v).format('YYYY-MM-DD HH:mm'),
+                },
+                {
+                  title: '操作',
+                  key: 'actions',
+                  width: 120,
+                  render: (_: any, record: any) => (
+                    <Space size={4}>
+                      <Button type="link" size="small" onClick={() => navigate(`/forensics/${record.id}`)}>
+                        详情
+                      </Button>
+                      <Popconfirm title="确定解绑该取证文件？" onConfirm={() => handleUnbindForensic(record.id)}>
+                        <Button type="link" size="small" danger icon={<DisconnectOutlined />}>
+                          解绑
+                        </Button>
+                      </Popconfirm>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          </Card>
         </div>
       ),
     },
@@ -1453,6 +1691,66 @@ export default function CaseDetail() {
         <div style={{ marginTop: 16, padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: 12, color: '#666' }}>
           导出格式为 JSON 文件，包含完整的案件信息及所选关联数据。文件可用于备份、归档或数据迁移。
         </div>
+      </Modal>
+
+      <Modal
+        title="关联取证文件"
+        open={bindForensicModal}
+        onCancel={() => setBindForensicModal(false)}
+        footer={null}
+        width={560}
+      >
+        <Form form={bindForensicForm} layout="vertical" onFinish={handleBindForensic}>
+          <Form.Item
+            name="forensicFileId"
+            label="选择取证文件"
+            rules={[{ required: true, message: '请选择要关联的取证文件' }]}
+          >
+            <Select
+              placeholder="请选择取证文件"
+              showSearch
+              optionFilterProp="label"
+              loading={allForensicLoading}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+              options={allForensicFiles
+                .filter((f: any) => !f.caseRelations?.some((r: any) => r.caseId === id))
+                .map((f: any) => ({
+                  label: `${f.forensicNumber} - ${f.fileName}`,
+                  value: f.id,
+                }))}
+            />
+          </Form.Item>
+          <Form.Item name="relationType" label="关联类型">
+            <Select
+              placeholder="选择关联类型（可选）"
+              allowClear
+              options={[
+                { label: '案件相关文件', value: '案件相关文件' },
+                { label: '证据材料', value: '证据材料' },
+                { label: '参考资料', value: '参考资料' },
+                { label: '嫌疑人相关', value: '嫌疑人相关' },
+                { label: '作案工具相关', value: '作案工具相关' },
+                { label: '其他', value: '其他' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="description" label="关联说明">
+            <Input.TextArea
+              rows={3}
+              placeholder="说明该取证文件与案件的关联关系..."
+              showCount
+              maxLength={500}
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">确认关联</Button>
+              <Button onClick={() => setBindForensicModal(false)}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
