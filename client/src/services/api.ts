@@ -185,4 +185,11 @@ export const clueCheckFlowApi = {
   getLogs: (id: string, params?: any) => api.get(`/clue-check-flows/${id}/logs`, { params }),
 };
 
+export const riskProfileApi = {
+  list: (params?: any) => api.get('/risk-profiles', { params }),
+  getStats: () => api.get('/risk-profiles/stats'),
+  get: (id: string) => api.get(`/risk-profiles/${id}`),
+  recalculate: (id: string) => api.get(`/risk-profiles/${id}/recalculate`),
+};
+
 export default api;

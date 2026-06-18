@@ -11,6 +11,7 @@ import {
   HistoryOutlined,
   ClusterOutlined,
   SolutionOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -50,6 +51,11 @@ const menuItems = [
     key: '/relations',
     icon: <ShareAltOutlined />,
     label: '人员关系图',
+  },
+  {
+    key: '/risk-profiles',
+    icon: <WarningOutlined />,
+    label: '风险画像',
   },
   {
     key: '/evidences',

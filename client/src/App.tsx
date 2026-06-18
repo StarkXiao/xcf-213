@@ -20,6 +20,8 @@ import OperationLogList from './pages/logs/OperationLogList';
 import CrossCaseAnalysis from './pages/analysis/CrossCaseAnalysis';
 import ClueCheckFlowList from './pages/clue-check-flow/ClueCheckFlowList';
 import ClueCheckFlowDetail from './pages/clue-check-flow/ClueCheckFlowDetail';
+import RiskProfileList from './pages/risk-profiles/RiskProfileList';
+import RiskProfileDetail from './pages/risk-profiles/RiskProfileDetail';
 
 const { Content } = Layout;
 
@@ -61,6 +63,9 @@ function App() {
 
             <Route path="/clue-check-flows" element={<ClueCheckFlowList />} />
             <Route path="/clue-check-flows/:id" element={<ClueCheckFlowDetail />} />
+
+            <Route path="/risk-profiles" element={<RiskProfileList />} />
+            <Route path="/risk-profiles/:id" element={<RiskProfileDetail />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
