@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar, Checkbox } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined, ExportOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, Row, Col, Progress, Steps, Timeline, Statistic, Divider, Table, Alert, Avatar, Checkbox, Empty } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined, SearchOutlined, PaperClipOutlined, ShareAltOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, FileSearchOutlined, TeamOutlined, FileTextOutlined, FundProjectionScreenOutlined, BulbOutlined, LinkOutlined, InfoCircleOutlined, ExportOutlined, DownloadOutlined, CoffeeOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
-import { caseApi, personApi, clueApi, evidenceApi } from '../../services/api';
+import { caseApi, personApi, clueApi, evidenceApi, caseMeetingApi } from '../../services/api';
 
 const statusColors: Record<string, string> = {
   '待立案': 'default',
@@ -96,6 +96,8 @@ export default function CaseDetail() {
     includePersons: true,
     includeRelations: true,
   });
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -104,6 +106,9 @@ export default function CaseDetail() {
       loadRelations();
       if (searchParams.get('tab') === 'thematic') {
         loadThematicView();
+      }
+      if (searchParams.get('tab') === 'meetings') {
+        loadMeetings();
       }
     }
   }, [id]);
@@ -150,10 +155,25 @@ export default function CaseDetail() {
     }
   };
 
+  const loadMeetings = async () => {
+    setMeetingsLoading(true);
+    try {
+      const res = await caseMeetingApi.list({ caseId: id, pageSize: 100 });
+      setMeetings(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load meetings:', error);
+    } finally {
+      setMeetingsLoading(false);
+    }
+  };
+
   const handleTabChange = (key: string) => {
     setActiveTab(key);
     if (key === 'thematic' && !thematicData) {
       loadThematicView();
+    }
+    if (key === 'meetings') {
+      loadMeetings();
     }
   };
 
@@ -1205,6 +1225,95 @@ export default function CaseDetail() {
                 />
               </Card>
             </>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'meetings',
+      label: (
+        <Space>
+          <CoffeeOutlined />
+          会商纪要 ({meetings.length})
+        </Space>
+      ),
+      children: (
+        <div>
+          <div style={{ marginBottom: 16, textAlign: 'right' }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/case-meetings/new?caseId=${id}`)}>
+              新建会商
+            </Button>
+          </div>
+          {meetingsLoading ? (
+            <Card loading style={{ minHeight: 200 }} />
+          ) : meetings.length > 0 ? (
+            <List
+              dataSource={meetings}
+              renderItem={(item: any) => (
+                <List.Item
+                  actions={[
+                    <Button type="link" size="small" onClick={() => navigate(`/case-meetings/${item.id}`)}>
+                      详情
+                    </Button>,
+                    <Button type="link" size="small" onClick={() => navigate(`/case-meetings/${item.id}/edit`)}>
+                      编辑
+                    </Button>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <Space>
+                        <a onClick={() => navigate(`/case-meetings/${item.id}`)}>{item.title}</a>
+                        <Tag color={
+                          item.status === 'DRAFT' ? 'default' :
+                          item.status === 'IN_PROGRESS' ? 'processing' :
+                          item.status === 'COMPLETED' ? 'success' : 'error'
+                        }>
+                          {item.status === 'DRAFT' ? '草稿' :
+                           item.status === 'IN_PROGRESS' ? '进行中' :
+                           item.status === 'COMPLETED' ? '已完成' : '已取消'}
+                        </Tag>
+                        <Tag color="blue">{item.meetingType}</Tag>
+                      </Space>
+                    }
+                    description={
+                      <div>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
+                          编号: <span style={{ fontFamily: 'monospace' }}>{item.meetingNumber}</span>
+                          {item.meetingTime && (
+                            <span style={{ marginLeft: 16 }}>
+                              时间: {moment(item.meetingTime).format('YYYY-MM-DD HH:mm')}
+                            </span>
+                          )}
+                          {item.hostName && (
+                            <span style={{ marginLeft: 16 }}>主持人: {item.hostName}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <Tag color="purple">{item._count?.attendees || 0} 人参会</Tag>
+                          <Tag color="orange">{item._count?.clueRelations || 0} 条线索</Tag>
+                          <Tag color="green">{item._count?.evidenceRelations || 0} 份证据</Tag>
+                          <Tag color="blue">{item._count?.todoItems || 0} 项待办</Tag>
+                        </div>
+                        {item.conclusion && (
+                          <div style={{
+                            marginTop: 8,
+                            padding: '8px 12px',
+                            background: '#f6ffed',
+                            borderRadius: 4,
+                            fontSize: 13,
+                          }}>
+                            <strong style={{ color: '#389e0d' }}>结论:</strong> {item.conclusion.slice(0, 100)}{item.conclusion.length > 100 ? '...' : ''}
+                          </div>
+                        )}
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          ) : (
+            <Empty description="暂无会商纪要" />
           )}
         </div>
       ),

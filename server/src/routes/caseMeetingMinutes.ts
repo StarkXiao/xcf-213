@@ -16,6 +16,8 @@ interface MeetingQuery {
   pageSize?: number;
   keyword?: string;
   caseId?: string;
+  clueId?: string;
+  evidenceId?: string;
   status?: string;
   meetingType?: string;
   hostName?: string;
@@ -132,6 +134,8 @@ export default async function (fastify: FastifyInstance) {
       pageSize = 10,
       keyword,
       caseId,
+      clueId,
+      evidenceId,
       status,
       meetingType,
       hostName,
@@ -158,6 +162,16 @@ export default async function (fastify: FastifyInstance) {
       where.meetingTime = {};
       if (startDate) where.meetingTime.gte = new Date(startDate);
       if (endDate) where.meetingTime.lte = new Date(endDate);
+    }
+    if (clueId) {
+      where.clueRelations = {
+        some: { clueId },
+      };
+    }
+    if (evidenceId) {
+      where.evidenceRelations = {
+        some: { evidenceId },
+      };
     }
 
     const [items, total] = await Promise.all([

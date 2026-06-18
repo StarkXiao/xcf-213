@@ -24,6 +24,9 @@ import ClueCheckFlowList from './pages/clue-check-flow/ClueCheckFlowList';
 import ClueCheckFlowDetail from './pages/clue-check-flow/ClueCheckFlowDetail';
 import RiskProfileList from './pages/risk-profiles/RiskProfileList';
 import RiskProfileDetail from './pages/risk-profiles/RiskProfileDetail';
+import CaseMeetingList from './pages/case-meetings/CaseMeetingList';
+import CaseMeetingDetail from './pages/case-meetings/CaseMeetingDetail';
+import CaseMeetingForm from './pages/case-meetings/CaseMeetingForm';
 
 const { Content } = Layout;
 
@@ -71,6 +74,11 @@ function App() {
 
             <Route path="/risk-profiles" element={<RiskProfileList />} />
             <Route path="/risk-profiles/:id" element={<RiskProfileDetail />} />
+
+            <Route path="/case-meetings" element={<CaseMeetingList />} />
+            <Route path="/case-meetings/new" element={<CaseMeetingForm />} />
+            <Route path="/case-meetings/:id" element={<CaseMeetingDetail />} />
+            <Route path="/case-meetings/:id/edit" element={<CaseMeetingForm />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

@@ -213,4 +213,35 @@ export const riskProfileApi = {
   recalculate: (id: string) => api.get(`/risk-profiles/${id}/recalculate`),
 };
 
+export const caseMeetingApi = {
+  list: (params?: any) => api.get('/case-meetings', { params }),
+  getStats: () => api.get('/case-meetings/stats'),
+  get: (id: string) => api.get(`/case-meetings/${id}`),
+  create: (data: any) => api.post('/case-meetings', data),
+  update: (id: string, data: any) => api.put(`/case-meetings/${id}`, data),
+  delete: (id: string) => api.delete(`/case-meetings/${id}`),
+  complete: (id: string, data?: any) => api.post(`/case-meetings/${id}/complete`, data),
+  cancel: (id: string, data?: any) => api.post(`/case-meetings/${id}/cancel`, data),
+
+  getAttendees: (id: string) => api.get(`/case-meetings/${id}/attendees`),
+  addAttendee: (id: string, data: any) => api.post(`/case-meetings/${id}/attendees`, data),
+  removeAttendee: (id: string, attendeeId: string) => api.delete(`/case-meetings/${id}/attendees/${attendeeId}`),
+
+  getClues: (id: string) => api.get(`/case-meetings/${id}/clues`),
+  addClue: (id: string, data: any) => api.post(`/case-meetings/${id}/clues`, data),
+  updateClue: (id: string, relationId: string, data: any) => api.put(`/case-meetings/${id}/clues/${relationId}`, data),
+  removeClue: (id: string, relationId: string) => api.delete(`/case-meetings/${id}/clues/${relationId}`),
+
+  getEvidences: (id: string) => api.get(`/case-meetings/${id}/evidences`),
+  addEvidence: (id: string, data: any) => api.post(`/case-meetings/${id}/evidences`, data),
+  updateEvidence: (id: string, relationId: string, data: any) => api.put(`/case-meetings/${id}/evidences/${relationId}`, data),
+  removeEvidence: (id: string, relationId: string) => api.delete(`/case-meetings/${id}/evidences/${relationId}`),
+
+  getTodos: (id: string) => api.get(`/case-meetings/${id}/todos`),
+  addTodo: (id: string, data: any) => api.post(`/case-meetings/${id}/todos`, data),
+  updateTodo: (id: string, todoId: string, data: any) => api.put(`/case-meetings/${id}/todos/${todoId}`, data),
+  deleteTodo: (id: string, todoId: string) => api.delete(`/case-meetings/${id}/todos/${todoId}`),
+  todoToTask: (id: string, todoId: string, data: any) => api.post(`/case-meetings/${id}/todos/${todoId}/to-task`, data),
+};
+
 export default api;

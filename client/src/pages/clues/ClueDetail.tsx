@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col, AutoComplete } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col, AutoComplete, Empty } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined, CoffeeOutlined } from '@ant-design/icons';
 import moment from 'moment';
-import { clueApi, personApi, evidenceApi } from '../../services/api';
+import { clueApi, personApi, evidenceApi, caseMeetingApi } from '../../services/api';
 
 const statusColors: Record<string, string> = {
   '待核实': 'default',
@@ -64,6 +64,11 @@ export default function ClueDetail() {
   const [verificationTotal, setVerificationTotal] = useState(0);
   const [editingVerification, setEditingVerification] = useState<any>(null);
   const [allEvidences, setAllEvidences] = useState<any[]>([]);
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
+  const [addMeetingModal, setAddMeetingModal] = useState(false);
+  const [addMeetingForm] = Form.useForm();
+  const [caseMeetings, setCaseMeetings] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -71,6 +76,7 @@ export default function ClueDetail() {
       loadAllPersons();
       loadVerifications();
       loadAllEvidences();
+      loadMeetings();
     }
   }, [id]);
 
@@ -195,6 +201,50 @@ export default function ClueDetail() {
       setPersonModal(false);
       personForm.resetFields();
       loadClueData();
+    } catch (error) {
+      message.error('添加失败');
+    }
+  };
+
+  const loadMeetings = async () => {
+    setMeetingsLoading(true);
+    try {
+      const res = await caseMeetingApi.list({ clueId: id, pageSize: 100 });
+      setMeetings(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load meetings:', error);
+    } finally {
+      setMeetingsLoading(false);
+    }
+  };
+
+  const loadCaseMeetings = async (caseId: string) => {
+    try {
+      const res = await caseMeetingApi.list({ caseId, pageSize: 100 });
+      setCaseMeetings(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load case meetings:', error);
+    }
+  };
+
+  const handleAddToMeeting = () => {
+    addMeetingForm.resetFields();
+    if (clueData?.caseId) {
+      loadCaseMeetings(clueData.caseId);
+    }
+    setAddMeetingModal(true);
+  };
+
+  const handleAddMeetingSubmit = async (values: any) => {
+    try {
+      await caseMeetingApi.addClue(values.meetingId, {
+        clueId: id,
+        discussionPoint: values.discussionPoint,
+      });
+      message.success('添加成功');
+      setAddMeetingModal(false);
+      addMeetingForm.resetFields();
+      loadMeetings();
     } catch (error) {
       message.error('添加失败');
     }
@@ -502,6 +552,73 @@ export default function ClueDetail() {
         </div>
       ),
     },
+    {
+      key: 'meetings',
+      label: `关联会商 (${meetings.length})`,
+      icon: <CoffeeOutlined />,
+      children: (
+        <div>
+          <div style={{ marginBottom: 16, textAlign: 'right' }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddToMeeting}>
+              加入会商
+            </Button>
+          </div>
+          {meetingsLoading ? (
+            <Card loading style={{ minHeight: 200 }} />
+          ) : meetings.length > 0 ? (
+            <List
+              dataSource={meetings}
+              renderItem={(item: any) => (
+                <List.Item
+                  actions={[
+                    <Button type="link" size="small" onClick={() => navigate(`/case-meetings/${item.id}`)}>
+                      查看会商
+                    </Button>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <Space>
+                        <a onClick={() => navigate(`/case-meetings/${item.id}`)}>{item.title}</a>
+                        <Tag color={
+                          item.status === 'DRAFT' ? 'default' :
+                          item.status === 'IN_PROGRESS' ? 'processing' :
+                          item.status === 'COMPLETED' ? 'success' : 'error'
+                        }>
+                          {item.status === 'DRAFT' ? '草稿' :
+                           item.status === 'IN_PROGRESS' ? '进行中' :
+                           item.status === 'COMPLETED' ? '已完成' : '已取消'}
+                        </Tag>
+                        <Tag color="blue">{item.meetingType}</Tag>
+                      </Space>
+                    }
+                    description={
+                      <div>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
+                          编号: <span style={{ fontFamily: 'monospace' }}>{item.meetingNumber}</span>
+                          {item.meetingTime && (
+                            <span style={{ marginLeft: 16 }}>
+                              时间: {moment(item.meetingTime).format('YYYY-MM-DD HH:mm')}
+                            </span>
+                          )}
+                        </div>
+                        {item.case && (
+                          <div style={{ fontSize: 12, color: '#666' }}>
+                            案件: <a onClick={() => navigate(`/cases/${item.caseId}`)}>{item.case.caseNumber} - {item.case.title}</a>
+                          </div>
+                        )}
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          ) : (
+            <Empty description="尚未加入任何会商" />
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -653,6 +770,36 @@ export default function ClueDetail() {
               </Button>
               <Button onClick={() => setVerificationModal(false)}>取消</Button>
             </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="加入会商"
+        open={addMeetingModal}
+        onOk={() => addMeetingForm.submit()}
+        onCancel={() => setAddMeetingModal(false)}
+        okText="确认加入"
+        width={500}
+      >
+        <Form form={addMeetingForm} layout="vertical" onFinish={handleAddMeetingSubmit}>
+          <Form.Item
+            name="meetingId"
+            label="选择会商"
+            rules={[{ required: true, message: '请选择要加入的会商' }]}
+          >
+            <Select
+              placeholder="请选择要加入的会商"
+              showSearch
+              optionFilterProp="children"
+              options={caseMeetings.map((m: any) => ({
+                label: `${m.meetingNumber} - ${m.title} (${m.meetingType})`,
+                value: m.id,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="discussionPoint" label="讨论要点">
+            <Input.TextArea rows={3} placeholder="记录该线索在会商中的讨论要点（可选）" />
           </Form.Item>
         </Form>
       </Modal>

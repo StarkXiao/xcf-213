@@ -13,6 +13,7 @@ import {
   SolutionOutlined,
   WarningOutlined,
   SwapOutlined,
+  CoffeeOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -42,6 +43,11 @@ const menuItems = [
     key: '/clue-check-flows',
     icon: <SolutionOutlined />,
     label: '线索核查闭环',
+  },
+  {
+    key: '/case-meetings',
+    icon: <CoffeeOutlined />,
+    label: '案件会商纪要',
   },
   {
     key: '/persons',

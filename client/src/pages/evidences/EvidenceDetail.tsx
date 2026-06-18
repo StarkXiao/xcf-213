@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, message, Popconfirm, Image, Row, Col, Typography } from 'antd';
-import { ArrowLeftOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, FileTextOutlined, VideoCameraOutlined, AudioOutlined, FileUnknownOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, message, Popconfirm, Image, Row, Col, Typography, Modal, Form, Select, Input, List, Empty } from 'antd';
+import { ArrowLeftOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined, FileTextOutlined, VideoCameraOutlined, AudioOutlined, FileUnknownOutlined, CoffeeOutlined, PlusOutlined } from '@ant-design/icons';
 import moment from 'moment';
-import { evidenceApi } from '../../services/api';
+import { evidenceApi, caseMeetingApi } from '../../services/api';
 
 const { Title, Paragraph } = Typography;
 
@@ -25,10 +25,16 @@ export default function EvidenceDetail() {
   const navigate = useNavigate();
   const [evidence, setEvidence] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
+  const [addMeetingModal, setAddMeetingModal] = useState(false);
+  const [addMeetingForm] = Form.useForm();
+  const [caseMeetings, setCaseMeetings] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
       loadEvidence();
+      loadMeetings();
     }
   }, [id]);
 
@@ -41,6 +47,50 @@ export default function EvidenceDetail() {
       message.error('加载失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMeetings = async () => {
+    setMeetingsLoading(true);
+    try {
+      const res = await caseMeetingApi.list({ evidenceId: id, pageSize: 100 });
+      setMeetings(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load meetings:', error);
+    } finally {
+      setMeetingsLoading(false);
+    }
+  };
+
+  const loadCaseMeetings = async (caseId: string) => {
+    try {
+      const res = await caseMeetingApi.list({ caseId, pageSize: 100 });
+      setCaseMeetings(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load case meetings:', error);
+    }
+  };
+
+  const handleAddToMeeting = () => {
+    addMeetingForm.resetFields();
+    if (evidence?.caseId) {
+      loadCaseMeetings(evidence.caseId);
+    }
+    setAddMeetingModal(true);
+  };
+
+  const handleAddMeetingSubmit = async (values: any) => {
+    try {
+      await caseMeetingApi.addEvidence(values.meetingId, {
+        evidenceId: id,
+        discussionPoint: values.discussionPoint,
+      });
+      message.success('添加成功');
+      setAddMeetingModal(false);
+      addMeetingForm.resetFields();
+      loadMeetings();
+    } catch (error) {
+      message.error('添加失败');
     }
   };
 
@@ -168,7 +218,7 @@ export default function EvidenceDetail() {
           </Card>
 
           <Card className="card-shadow" style={{ marginTop: 16 }} title="关联信息">
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
               {evidence.case && (
                 <div style={{ padding: 12, background: '#f0f5ff', borderRadius: 6 }}>
                   <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>关联案件</div>
@@ -191,7 +241,45 @@ export default function EvidenceDetail() {
                   </div>
                 </div>
               )}
-              {!evidence.case && !evidence.clue && (
+              <div style={{ padding: 12, background: '#f9f0ff', borderRadius: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    <CoffeeOutlined style={{ marginRight: 4 }} />
+                    关联会商 ({meetings.length})
+                  </div>
+                  <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddToMeeting}>
+                    加入会商
+                  </Button>
+                </div>
+                {meetingsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0' }}>加载中...</div>
+                ) : meetings.length > 0 ? (
+                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                    {meetings.slice(0, 3).map((m: any) => (
+                      <div key={m.id} style={{ padding: 8, background: '#fff', borderRadius: 4, border: '1px solid #e8e8e8' }}>
+                        <a onClick={() => navigate(`/case-meetings/${m.id}`)} style={{ fontSize: 13, fontWeight: 500 }}>
+                          {m.title}
+                        </a>
+                        <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                          {m.meetingNumber} · {m.meetingType}
+                        </div>
+                      </div>
+                    ))}
+                    {meetings.length > 3 && (
+                      <div style={{ textAlign: 'center' }}>
+                        <Button type="link" size="small" onClick={() => navigate('/case-meetings?evidenceId=' + id)}>
+                          查看全部 {meetings.length} 个
+                        </Button>
+                      </div>
+                    )}
+                  </Space>
+                ) : (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '10px 0', fontSize: 12 }}>
+                    尚未加入任何会商
+                  </div>
+                )}
+              </div>
+              {!evidence.case && !evidence.clue && meetings.length === 0 && (
                 <div style={{ color: '#999', textAlign: 'center', padding: 20 }}>
                   暂无关联信息
                 </div>
@@ -200,6 +288,36 @@ export default function EvidenceDetail() {
           </Card>
         </Col>
       </Row>
+
+      <Modal
+        title="加入会商"
+        open={addMeetingModal}
+        onOk={() => addMeetingForm.submit()}
+        onCancel={() => setAddMeetingModal(false)}
+        okText="确认加入"
+        width={500}
+      >
+        <Form form={addMeetingForm} layout="vertical" onFinish={handleAddMeetingSubmit}>
+          <Form.Item
+            name="meetingId"
+            label="选择会商"
+            rules={[{ required: true, message: '请选择要加入的会商' }]}
+          >
+            <Select
+              placeholder="请选择要加入的会商"
+              showSearch
+              optionFilterProp="children"
+              options={caseMeetings.map((m: any) => ({
+                label: `${m.meetingNumber} - ${m.title} (${m.meetingType})`,
+                value: m.id,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="discussionPoint" label="讨论要点">
+            <Input.TextArea rows={3} placeholder="记录该证据在会商中的讨论要点（可选）" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
