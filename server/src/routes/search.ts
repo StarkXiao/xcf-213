@@ -334,13 +334,149 @@ export default async function (fastify: FastifyInstance) {
     const recentCases = await prisma.case.findMany({
       take: 5,
       orderBy: { createdAt: 'desc' },
-      select: { id: true, caseNumber: true, title: true, status: true, createdAt: true },
+      select: { id: true, caseNumber: true, title: true, status: true, priority: true, createdAt: true },
     });
 
     const recentClues = await prisma.clue.findMany({
       take: 5,
       orderBy: { createdAt: 'desc' },
       select: { id: true, clueNumber: true, title: true, status: true, createdAt: true },
+    });
+
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    const caseTrendRaw = await prisma.case.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { id: true, status: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const caseTrend: { month: string; [key: string]: number | string }[] = [];
+    const caseStatuses = ['待立案', '已立案', '侦查中', '已移送起诉', '已判决', '已结案', '已撤销'];
+    for (let i = 0; i < 6; i++) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const monthStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthData: { month: string; [key: string]: number | string } = { month: monthStr };
+      caseStatuses.forEach(status => { monthData[status] = 0; });
+      monthData['总计'] = 0;
+      caseTrend.push(monthData);
+    }
+
+    caseTrendRaw.forEach(c => {
+      const monthIdx = caseTrend.findIndex(m => {
+        const [year, month] = m.month.split('-').map(Number);
+        return c.createdAt.getFullYear() === year && c.createdAt.getMonth() === month - 1;
+      });
+      if (monthIdx >= 0) {
+        caseTrend[monthIdx][c.status] = (caseTrend[monthIdx][c.status] as number) + 1;
+        caseTrend[monthIdx]['总计'] = (caseTrend[monthIdx]['总计'] as number) + 1;
+      }
+    });
+
+    const clueTrendRaw = await prisma.clue.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { id: true, status: true, caseId: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const clueTrend: { month: string; [key: string]: number | string }[] = [];
+    const clueStatuses = ['待核实', '核实中', '已核实', '已采用', '已排除'];
+    for (let i = 0; i < 6; i++) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const monthStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthData: { month: string; [key: string]: number | string } = { month: monthStr };
+      clueStatuses.forEach(status => { monthData[status] = 0; });
+      monthData['已转化案件'] = 0;
+      monthData['总计'] = 0;
+      clueTrend.push(monthData);
+    }
+
+    clueTrendRaw.forEach(c => {
+      const monthIdx = clueTrend.findIndex(m => {
+        const [year, month] = m.month.split('-').map(Number);
+        return c.createdAt.getFullYear() === year && c.createdAt.getMonth() === month - 1;
+      });
+      if (monthIdx >= 0) {
+        clueTrend[monthIdx][c.status] = (clueTrend[monthIdx][c.status] as number) + 1;
+        clueTrend[monthIdx]['总计'] = (clueTrend[monthIdx]['总计'] as number) + 1;
+        if (c.caseId) {
+          clueTrend[monthIdx]['已转化案件'] = (clueTrend[monthIdx]['已转化案件'] as number) + 1;
+        }
+      }
+    });
+
+    const totalConvertedClues = await prisma.clue.count({
+      where: { caseId: { not: null } },
+    });
+    const clueConversionRate = clueCount > 0 ? Math.round((totalConvertedClues / clueCount) * 100) : 0;
+
+    const evidenceTrendRaw = await prisma.evidence.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { id: true, status: true, type: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const evidenceTrend: { month: string; [key: string]: number | string }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const monthStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthData: { month: string; [key: string]: number | string } = { month: monthStr };
+      monthData['已入库'] = 0;
+      monthData['待鉴定'] = 0;
+      monthData['已鉴定'] = 0;
+      monthData['总计'] = 0;
+      evidenceTrend.push(monthData);
+    }
+
+    evidenceTrendRaw.forEach(e => {
+      const monthIdx = evidenceTrend.findIndex(m => {
+        const [year, month] = m.month.split('-').map(Number);
+        return e.createdAt.getFullYear() === year && e.createdAt.getMonth() === month - 1;
+      });
+      if (monthIdx >= 0) {
+        evidenceTrend[monthIdx]['总计'] = (evidenceTrend[monthIdx]['总计'] as number) + 1;
+        if (e.status === '已入库') {
+          evidenceTrend[monthIdx]['已入库'] = (evidenceTrend[monthIdx]['已入库'] as number) + 1;
+        } else if (e.status === '待鉴定') {
+          evidenceTrend[monthIdx]['待鉴定'] = (evidenceTrend[monthIdx]['待鉴定'] as number) + 1;
+        } else if (e.status === '已鉴定') {
+          evidenceTrend[monthIdx]['已鉴定'] = (evidenceTrend[monthIdx]['已鉴定'] as number) + 1;
+        }
+      }
+    });
+
+    const personTrendRaw = await prisma.person.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { id: true, personType: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const personTrend: { month: string; [key: string]: number | string }[] = [];
+    const personTypes = ['嫌疑人', '受害人', '证人', '关系人', '其他'];
+    for (let i = 0; i < 6; i++) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const monthStr = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthData: { month: string; [key: string]: number | string } = { month: monthStr };
+      personTypes.forEach(type => { monthData[type] = 0; });
+      monthData['总计'] = 0;
+      personTrend.push(monthData);
+    }
+
+    personTrendRaw.forEach(p => {
+      const monthIdx = personTrend.findIndex(m => {
+        const [year, month] = m.month.split('-').map(Number);
+        return p.createdAt.getFullYear() === year && p.createdAt.getMonth() === month - 1;
+      });
+      if (monthIdx >= 0) {
+        personTrend[monthIdx][p.personType] = (personTrend[monthIdx][p.personType] as number) + 1;
+        personTrend[monthIdx]['总计'] = (personTrend[monthIdx]['总计'] as number) + 1;
+      }
+    });
+
+    const keyPersonStats = await prisma.person.groupBy({
+      by: ['personType'],
+      _count: true,
     });
 
     return {
@@ -354,6 +490,13 @@ export default async function (fastify: FastifyInstance) {
       clueStats,
       recentCases,
       recentClues,
+      caseTrend,
+      clueTrend,
+      clueConversionRate,
+      totalConvertedClues,
+      evidenceTrend,
+      personTrend,
+      keyPersonStats,
     };
   });
 

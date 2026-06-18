@@ -17,6 +17,13 @@ interface StatsData {
   clueStats: any[];
   recentCases: any[];
   recentClues: any[];
+  caseTrend: any[];
+  clueTrend: any[];
+  clueConversionRate: number;
+  totalConvertedClues: number;
+  evidenceTrend: any[];
+  personTrend: any[];
+  keyPersonStats: any[];
 }
 
 const statusColors: Record<string, string> = {
@@ -97,6 +104,202 @@ export default function Dashboard() {
     color: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1'],
   };
 
+  const caseTrendOption = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['总计', '待立案', '侦查中', '已移送起诉', '已结案'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: stats?.caseTrend?.map(t => t.month) || [],
+    },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: '总计',
+        type: 'line',
+        smooth: true,
+        data: stats?.caseTrend?.map(t => t['总计']) || [],
+        itemStyle: { color: '#1677ff' },
+        areaStyle: { opacity: 0.1 },
+      },
+      {
+        name: '待立案',
+        type: 'line',
+        smooth: true,
+        data: stats?.caseTrend?.map(t => t['待立案']) || [],
+        itemStyle: { color: '#faad14' },
+      },
+      {
+        name: '侦查中',
+        type: 'line',
+        smooth: true,
+        data: stats?.caseTrend?.map(t => t['侦查中']) || [],
+        itemStyle: { color: '#1677ff' },
+      },
+      {
+        name: '已移送起诉',
+        type: 'line',
+        smooth: true,
+        data: stats?.caseTrend?.map(t => t['已移送起诉']) || [],
+        itemStyle: { color: '#722ed1' },
+      },
+      {
+        name: '已结案',
+        type: 'line',
+        smooth: true,
+        data: stats?.caseTrend?.map(t => t['已结案']) || [],
+        itemStyle: { color: '#52c41a' },
+      },
+    ],
+  };
+
+  const clueTrendOption = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['总计', '已转化案件', '已核实', '已采用', '已排除'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: stats?.clueTrend?.map(t => t.month) || [],
+    },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: '总计',
+        type: 'line',
+        smooth: true,
+        data: stats?.clueTrend?.map(t => t['总计']) || [],
+        itemStyle: { color: '#722ed1' },
+        areaStyle: { opacity: 0.1 },
+      },
+      {
+        name: '已转化案件',
+        type: 'line',
+        smooth: true,
+        data: stats?.clueTrend?.map(t => t['已转化案件']) || [],
+        itemStyle: { color: '#52c41a' },
+        lineStyle: { width: 3 },
+      },
+      {
+        name: '已核实',
+        type: 'line',
+        smooth: true,
+        data: stats?.clueTrend?.map(t => t['已核实']) || [],
+        itemStyle: { color: '#faad14' },
+      },
+      {
+        name: '已采用',
+        type: 'line',
+        smooth: true,
+        data: stats?.clueTrend?.map(t => t['已采用']) || [],
+        itemStyle: { color: '#1677ff' },
+      },
+      {
+        name: '已排除',
+        type: 'line',
+        smooth: true,
+        data: stats?.clueTrend?.map(t => t['已排除']) || [],
+        itemStyle: { color: '#ff4d4f' },
+      },
+    ],
+  };
+
+  const evidenceTrendOption = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['总计', '已入库', '已鉴定', '待鉴定'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: stats?.evidenceTrend?.map(t => t.month) || [],
+    },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: '总计',
+        type: 'line',
+        smooth: true,
+        data: stats?.evidenceTrend?.map(t => t['总计']) || [],
+        itemStyle: { color: '#13c2c2' },
+        areaStyle: { opacity: 0.1 },
+      },
+      {
+        name: '已入库',
+        type: 'line',
+        smooth: true,
+        data: stats?.evidenceTrend?.map(t => t['已入库']) || [],
+        itemStyle: { color: '#52c41a' },
+        lineStyle: { width: 3 },
+      },
+      {
+        name: '已鉴定',
+        type: 'line',
+        smooth: true,
+        data: stats?.evidenceTrend?.map(t => t['已鉴定']) || [],
+        itemStyle: { color: '#1677ff' },
+      },
+      {
+        name: '待鉴定',
+        type: 'line',
+        smooth: true,
+        data: stats?.evidenceTrend?.map(t => t['待鉴定']) || [],
+        itemStyle: { color: '#faad14' },
+      },
+    ],
+  };
+
+  const personTrendOption = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['总计', '嫌疑人', '受害人', '证人', '关系人'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: stats?.personTrend?.map(t => t.month) || [],
+    },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: '总计',
+        type: 'line',
+        smooth: true,
+        data: stats?.personTrend?.map(t => t['总计']) || [],
+        itemStyle: { color: '#eb2f96' },
+        areaStyle: { opacity: 0.1 },
+      },
+      {
+        name: '嫌疑人',
+        type: 'line',
+        smooth: true,
+        data: stats?.personTrend?.map(t => t['嫌疑人']) || [],
+        itemStyle: { color: '#ff4d4f' },
+        lineStyle: { width: 3 },
+      },
+      {
+        name: '受害人',
+        type: 'line',
+        smooth: true,
+        data: stats?.personTrend?.map(t => t['受害人']) || [],
+        itemStyle: { color: '#faad14' },
+      },
+      {
+        name: '证人',
+        type: 'line',
+        smooth: true,
+        data: stats?.personTrend?.map(t => t['证人']) || [],
+        itemStyle: { color: '#52c41a' },
+      },
+      {
+        name: '关系人',
+        type: 'line',
+        smooth: true,
+        data: stats?.personTrend?.map(t => t['关系人']) || [],
+        itemStyle: { color: '#1677ff' },
+      },
+    ],
+  };
+
   const statCards = [
     { title: '案件总数', value: stats?.totals.cases || 0, icon: <FileTextOutlined />, color: 'case', action: () => navigate('/cases') },
     { title: '线索总数', value: stats?.totals.clues || 0, icon: <SearchOutlined />, color: 'clue', action: () => navigate('/clues') },
@@ -143,6 +346,68 @@ export default function Dashboard() {
         <Col xs={24} md={12}>
           <Card title="线索状态分布" className="card-shadow" loading={loading}>
             <ReactECharts option={clueChartOption} style={{ height: '300px' }} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+        <Col xs={24} md={12}>
+          <Card 
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>案件推进趋势</span>
+                <Tag color="blue">近6个月</Tag>
+              </div>
+            } 
+            className="card-shadow" 
+            loading={loading}
+          >
+            <ReactECharts option={caseTrendOption} style={{ height: '280px' }} />
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card 
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>线索转化趋势</span>
+                <Tag color="green">转化率 {stats?.clueConversionRate || 0}%</Tag>
+              </div>
+            } 
+            className="card-shadow" 
+            loading={loading}
+          >
+            <ReactECharts option={clueTrendOption} style={{ height: '280px' }} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+        <Col xs={24} md={12}>
+          <Card 
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>证据入库趋势</span>
+                <Tag color="cyan">近6个月</Tag>
+              </div>
+            } 
+            className="card-shadow" 
+            loading={loading}
+          >
+            <ReactECharts option={evidenceTrendOption} style={{ height: '280px' }} />
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card 
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>重点人员变化趋势</span>
+                <Tag color="magenta">近6个月</Tag>
+              </div>
+            } 
+            className="card-shadow" 
+            loading={loading}
+          >
+            <ReactECharts option={personTrendOption} style={{ height: '280px' }} />
           </Card>
         </Col>
       </Row>
