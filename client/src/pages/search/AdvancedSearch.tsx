@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Form, Input, Select, Button, Space, Tabs, Table, Tag, message, Row, Col, DatePicker, Collapse, Empty, Typography, Radio, Divider, List, Avatar, Tooltip, Modal, Descriptions, Statistic, Checkbox, Alert } from 'antd';
-import { SearchOutlined, ReloadOutlined, FileTextOutlined, BulbOutlined, TeamOutlined, PaperClipOutlined, EnvironmentOutlined, PhoneOutlined, BarcodeOutlined, WarningOutlined, FolderAddOutlined, FundProjectionScreenOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, FileTextOutlined, BulbOutlined, TeamOutlined, PaperClipOutlined, EnvironmentOutlined, PhoneOutlined, BarcodeOutlined, WarningOutlined, FolderAddOutlined, FundProjectionScreenOutlined, CheckCircleOutlined, TagsOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import type { ColumnsType } from 'antd/es/table';
@@ -9,6 +9,13 @@ import { searchApi } from '../../services/api';
 const { Title, Text, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
 const { Panel } = Collapse;
+
+const categoryColors: Record<string, string> = {
+  '案件类型': '#1677ff',
+  '线索来源': '#52c41a',
+  '关系角色': '#722ed1',
+  '自定义': '#fa8c16',
+};
 
 export default function AdvancedSearch() {
   const navigate = useNavigate();
@@ -59,6 +66,21 @@ export default function AdvancedSearch() {
         params.occurStartDate = values.occurTime[0]?.toISOString();
         params.occurEndDate = values.occurTime[1]?.toISOString();
         delete params.occurTime;
+      }
+
+      const allTagIds = [
+        ...(values.tagIds || []),
+        ...(values.caseTypeTagNames || []),
+        ...(values.clueSourceTagNames || []),
+        ...(values.roleTagNames || []),
+      ];
+      delete params.tagIds;
+      delete params.caseTypeTagNames;
+      delete params.clueSourceTagNames;
+      delete params.roleTagNames;
+
+      if (allTagIds.length > 0) {
+        params.tagIds = [...new Set(allTagIds)];
       }
 
       const res = await searchApi.advancedSearch(params);
@@ -293,6 +315,27 @@ export default function AdvancedSearch() {
       render: (text) => {
         const color = text === '嫌疑人' ? 'red' : text === '受害人' ? 'orange' : text === '证人' ? 'green' : 'blue';
         return <Tag color={color}>{text}</Tag>;
+      },
+    },
+    {
+      title: '标签',
+      dataIndex: 'personTags',
+      width: 200,
+      render: (personTags: any[]) => {
+        if (!personTags || personTags.length === 0) return <span style={{ color: '#ccc' }}>-</span>;
+        const tags = personTags.map((pt: any) => pt.tag).filter(Boolean);
+        const display = tags.slice(0, 3);
+        const extra = tags.length - 3;
+        return (
+          <Space size={[4, 4]} wrap>
+            {display.map((t: any) => (
+              <Tag key={t.id} color={t.color || categoryColors[t.category] || 'default'} style={{ margin: 0 }}>
+                {t.name}
+              </Tag>
+            ))}
+            {extra > 0 && <Tag style={{ margin: 0 }}>+{extra}</Tag>}
+          </Space>
+        );
       },
     },
     {
@@ -1078,7 +1121,7 @@ export default function AdvancedSearch() {
 
         {searchMode === 'advanced' && (
           <Form form={form} layout="vertical" onFinish={handleSearch}>
-          <Collapse defaultActiveKey={['1', '2', '3', '4']}>
+          <Collapse defaultActiveKey={['1', '2', '3', '4', '5']}>
             <Panel header="通用查询条件" key="1">
               <Row gutter={16}>
                 <Col xs={24} sm={12} md={6}>
@@ -1193,6 +1236,123 @@ export default function AdvancedSearch() {
                   </Form.Item>
                 </Col>
               </Row>
+            </Panel>
+
+            <Panel header={
+              <Space>
+                <TagsOutlined />
+                标签筛选
+              </Space>
+            } key="5">
+              <Row gutter={16}>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item name="tagIds" label="人员标签">
+                    <Select
+                      mode="multiple"
+                      placeholder="选择标签筛选人员"
+                      allowClear
+                      maxTagCount={3}
+                      style={{ width: '100%' }}
+                      options={(options.tagCategories || ['案件类型', '线索来源', '关系角色', '自定义']).flatMap((category: string) => {
+                        const categoryTags = (options.tags || []).filter((t: any) => t.category === category);
+                        if (categoryTags.length === 0) return [];
+                        return [{
+                          label: (
+                            <span style={{ color: categoryColors[category] || '#666', fontWeight: 500, fontSize: 12 }}>
+                              ── {category} ──
+                            </span>
+                          ),
+                          options: categoryTags.map((t: any) => ({
+                            label: (
+                              <Space>
+                                <Tag color={t.color || categoryColors[t.category] || 'default'} style={{ margin: 0, fontSize: 11 }}>
+                                  {t.name}
+                                </Tag>
+                                <span style={{ fontSize: 11, color: '#999' }}>{t._count?.personTags || 0}人</span>
+                              </Space>
+                            ),
+                            value: t.id,
+                          })),
+                        }];
+                      })}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item label="案件类型标签" name="caseTypeTagNames">
+                    <Select
+                      mode="multiple"
+                      placeholder="按案件类型标签筛选"
+                      allowClear
+                      maxTagCount={3}
+                      style={{ width: '100%' }}
+                      options={(options.tags || [])
+                        .filter((t: any) => t.category === '案件类型')
+                        .map((t: any) => ({
+                          label: (
+                            <Space>
+                              <Tag color={t.color || '#1677ff'} style={{ margin: 0, fontSize: 11 }}>{t.name}</Tag>
+                              <span style={{ fontSize: 11, color: '#999' }}>{t._count?.personTags || 0}人</span>
+                            </Space>
+                          ),
+                          value: t.id,
+                        }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item label="线索来源标签" name="clueSourceTagNames">
+                    <Select
+                      mode="multiple"
+                      placeholder="按线索来源标签筛选"
+                      allowClear
+                      maxTagCount={3}
+                      style={{ width: '100%' }}
+                      options={(options.tags || [])
+                        .filter((t: any) => t.category === '线索来源')
+                        .map((t: any) => ({
+                          label: (
+                            <Space>
+                              <Tag color={t.color || '#52c41a'} style={{ margin: 0, fontSize: 11 }}>{t.name}</Tag>
+                              <span style={{ fontSize: 11, color: '#999' }}>{t._count?.personTags || 0}人</span>
+                            </Space>
+                          ),
+                          value: t.id,
+                        }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item label="关系角色标签" name="roleTagNames">
+                    <Select
+                      mode="multiple"
+                      placeholder="按关系角色标签筛选"
+                      allowClear
+                      maxTagCount={3}
+                      style={{ width: '100%' }}
+                      options={(options.tags || [])
+                        .filter((t: any) => t.category === '关系角色')
+                        .map((t: any) => ({
+                          label: (
+                            <Space>
+                              <Tag color={t.color || '#722ed1'} style={{ margin: 0, fontSize: 11 }}>{t.name}</Tag>
+                              <span style={{ fontSize: 11, color: '#999' }}>{t._count?.personTags || 0}人</span>
+                            </Space>
+                          ),
+                          value: t.id,
+                        }))}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <div style={{ padding: '8px 16px', background: '#f6ffed', borderRadius: 8 }}>
+                <Space>
+                  <TagsOutlined style={{ color: '#52c41a' }} />
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    标签筛选基于人员标签体系，与案件类型、线索来源、关系角色联动。选择标签后将筛选拥有对应标签的人员。
+                  </Text>
+                </Space>
+              </div>
             </Panel>
           </Collapse>
 
