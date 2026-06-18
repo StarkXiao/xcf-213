@@ -35,10 +35,6 @@ export const clueApi = {
   delete: (id: string) => api.delete(`/clues/${id}`),
   addPerson: (id: string, data: any) => api.post(`/clues/${id}/persons`, data),
   removePerson: (id: string, personId: string) => api.delete(`/clues/${id}/persons/${personId}`),
-  batchAssign: (data: { clueIds: string[]; caseId: string; handler?: string; status?: string }) => api.post('/clues/batch/assign', data),
-  batchReturn: (data: { clueIds: string[]; note?: string }) => api.post('/clues/batch/return', data),
-  batchMerge: (data: { clueIds: string[]; targetClueId: string; caseId?: string }) => api.post('/clues/batch/merge', data),
-  batchToEvidence: (data: { clueIds: string[]; caseId: string; evidenceType?: string }) => api.post('/clues/batch/to-evidence', data),
 };
 
 export const personApi = {
@@ -51,7 +47,6 @@ export const personApi = {
   getRelations: (id: string) => api.get(`/persons/${id}/relations`),
   getAllRelations: () => api.get('/persons/relations/all'),
   addRelation: (id: string, data: any) => api.post(`/persons/${id}/relations`, data),
-  getRelationTimeline: (id: string) => api.get(`/persons/${id}/relation-timeline`),
 };
 
 export const relationApi = {
@@ -82,12 +77,6 @@ export const evidenceApi = {
   download: (id: string) => api.get(`/evidences/${id}/download`, { responseType: 'blob' }),
   getCases: () => api.get('/evidences/cases'),
   getClues: (caseId: string) => api.get(`/evidences/cases/${caseId}/clues`),
-  getBorrowRecords: (id: string, params?: any) => api.get(`/evidences/${id}/borrow-records`, { params }),
-  borrow: (id: string, data: any) => api.post(`/evidences/${id}/borrow`, data),
-  returnEvidence: (id: string, data: any) => api.put(`/evidences/${id}/return`, data),
-  getAllBorrowRecords: (params?: any) => api.get('/evidences/borrow-records/all', { params }),
-  getOperationLogs: (id: string, params?: any) => api.get(`/evidences/${id}/operation-logs`, { params }),
-  getAllOperationLogs: (params?: any) => api.get('/evidences/operation-logs/all', { params }),
 };
 
 export const searchApi = {
@@ -95,7 +84,6 @@ export const searchApi = {
   advancedSearch: (params?: any) => api.get('/search/advanced', { params }),
   stats: () => api.get('/search/stats'),
   options: () => api.get('/search/options'),
-  crossCaseDedupe: (params?: any) => api.get('/search/cross-case-dedupe', { params }),
 };
 
 export default api;
