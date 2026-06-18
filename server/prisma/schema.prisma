@@ -40,6 +40,7 @@ model Case {
   evidenceBatches EvidenceBatch[] @relation("BatchCase")
   sourceRelations CaseRelation[] @relation("SourceCase")
   targetRelations CaseRelation[] @relation("TargetCase")
+  commandTasks CommandTask[]
 }
 
 // 人员信息表
@@ -63,6 +64,7 @@ model Person {
   relationsAsSubject PersonRelation[] @relation("SubjectRelations")
   relationsAsObject  PersonRelation[] @relation("ObjectRelations")
   personTags   PersonTag[]
+  commandTasks CommandTask[]
 }
 
 // 案件-人员关联表
@@ -121,6 +123,7 @@ model Clue {
   evidenceBorrows EvidenceBorrow[]
   evidenceBatches EvidenceBatch[] @relation("BatchClue")
   verifications ClueVerification[]
+  commandTasks CommandTask[]
 }
 
 // 线索-人员关联表
@@ -196,6 +199,7 @@ model Evidence {
   clue               Clue?               @relation(fields: [clueId], references: [id])
   clueVerification   ClueVerification?   @relation(fields: [clueVerificationId], references: [id])
   borrowRecords      EvidenceBorrow[]
+  commandTasks       CommandTask[]
 }
 
 // 证据借阅记录表
@@ -298,4 +302,160 @@ model PersonTag {
   tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([personId, tagId])
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+enum TaskType {
+  CASE_INVESTIGATION
+  CLUE_VERIFICATION
+  EVIDENCE_COLLECTION
+  PERSON_INTERROGATION
+  ANALYSIS_REPORT
+  COORDINATION
+  OTHER
+}
+
+enum FlowAction {
+  ASSIGN
+  TRANSFER
+  RECEIVE
+  RETURN
+  APPROVE
+  REJECT
+  ARCHIVE
+  UNARCHIVE
+}
+
+enum FlowTargetType {
+  CASE
+  CLUE
+  EVIDENCE
+  PERSON
+}
+
+model CommandTask {
+  id            String      @id @default(uuid())
+  taskNumber    String      @unique
+  title         String
+  description   String
+  taskType      TaskType
+  priority      TaskPriority
+  status        TaskStatus  @default(PENDING)
+  progress      Int         @default(0)
+
+  caseId        String?
+  clueId        String?
+  evidenceId    String?
+  personId      String?
+
+  assigneeId    String?
+  assigneeName  String?
+  assigneeDept  String?
+
+  assignerId    String?
+  assignerName  String?
+  assignerDept  String?
+
+  dueDate       DateTime?
+  startDate     DateTime?
+  completedDate DateTime?
+
+  actualStart   DateTime?
+  actualEnd     DateTime?
+
+  location      String?
+  requirement   String?
+  result        String?
+  note          String?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  case          Case?       @relation(fields: [caseId], references: [id])
+  clue          Clue?       @relation(fields: [clueId], references: [id])
+  evidence      Evidence?   @relation(fields: [evidenceId], references: [id])
+  person        Person?     @relation(fields: [personId], references: [id])
+  progresses    TaskProgress[]
+  flowRecords   FlowRecord[] @relation("TaskFlow")
+
+  @@index([caseId])
+  @@index([clueId])
+  @@index([evidenceId])
+  @@index([personId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([dueDate])
+}
+
+model TaskProgress {
+  id          String     @id @default(uuid())
+  taskId      String
+  progress    Int
+  description String
+  result      String?
+  issue       String?
+  suggestion  String?
+  reporterId  String?
+  reporterName String?
+  progressDate DateTime?
+  createdAt   DateTime   @default(now())
+
+  task        CommandTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([createdAt])
+}
+
+model FlowRecord {
+  id            String          @id @default(uuid())
+  taskId        String?
+  sourceType    FlowTargetType
+  sourceId      String
+  sourceName    String?
+  sourceNumber  String?
+
+  action        FlowAction
+  description   String?
+
+  fromUserId    String?
+  fromUserName  String?
+  fromUserDept  String?
+
+  toUserId      String?
+  toUserName    String?
+  toUserDept    String?
+
+  status        String?
+  remark        String?
+
+  operatorId    String?
+  operatorName  String?
+  operatorDept  String?
+
+  actionTime    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+
+  task          CommandTask?    @relation("TaskFlow", fields: [taskId], references: [id])
+
+  @@index([sourceType, sourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([fromUserId])
+  @@index([toUserId])
 }
