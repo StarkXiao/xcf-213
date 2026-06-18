@@ -17,6 +17,7 @@ import commandRoutes from './routes/command';
 import analysisRoutes from './routes/analysis';
 import clueCheckFlowRoutes from './routes/clueCheckFlows';
 import riskProfileRoutes from './routes/riskProfiles';
+import caseMeetingMinutesRoutes from './routes/caseMeetingMinutes';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -61,6 +62,7 @@ server.register(commandRoutes, { prefix: '/api/command' });
 server.register(analysisRoutes, { prefix: '/api/analysis' });
 server.register(clueCheckFlowRoutes, { prefix: '/api/clue-check-flows' });
 server.register(riskProfileRoutes, { prefix: '/api/risk-profiles' });
+server.register(caseMeetingMinutesRoutes, { prefix: '/api/case-meetings' });
 
 const start = async () => {
   try {

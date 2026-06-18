@@ -42,6 +42,8 @@ model Case {
   sourceRelations CaseRelation[] @relation("SourceCase")
   targetRelations CaseRelation[] @relation("TargetCase")
   commandTasks CommandTask[]
+  meetingMinutes CaseMeetingMinutes[]
+  clueCheckFlows ClueCheckFlow[]
 }
 
 // 人员信息表
@@ -126,6 +128,8 @@ model Clue {
   evidenceTransfers EvidenceTransfer[]
   verifications ClueVerification[]
   commandTasks CommandTask[]
+  clueCheckFlows ClueCheckFlow[]
+  meetingClues MeetingClue[]
 }
 
 // 线索-人员关联表
@@ -203,6 +207,7 @@ model Evidence {
   borrowRecords      EvidenceBorrow[]
   transfers          EvidenceTransfer[]
   commandTasks       CommandTask[]
+  meetingEvidences   MeetingEvidence[]
 }
 
 // 证据流转类型枚举
@@ -628,6 +633,7 @@ model CommandTask {
   person        Person?     @relation(fields: [personId], references: [id])
   progresses    TaskProgress[]
   flowRecords   FlowRecord[] @relation("TaskFlow")
+  meetingTodoItems MeetingTodoItem[]
 
   @@index([caseId])
   @@index([clueId])
@@ -695,4 +701,135 @@ model FlowRecord {
   @@index([createdAt])
   @@index([fromUserId])
   @@index([toUserId])
+}
+
+enum MeetingStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MeetingTodoStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model CaseMeetingMinutes {
+  id              String          @id @default(uuid())
+  meetingNumber   String          @unique
+  caseId          String
+  title           String
+  meetingType     String
+  status          MeetingStatus   @default(DRAFT)
+  location        String?
+  meetingTime     DateTime?
+  hostId          String?
+  hostName        String?
+  hostDept        String?
+  recorderId      String?
+  recorderName    String?
+  recorderDept    String?
+
+  caseAnalysis    String?
+  clueAnalysis    String?
+  evidenceAnalysis String?
+  personAnalysis  String?
+  discussionContent String?
+  conclusion      String?
+  note            String?
+
+  operatorId      String?
+  operatorName    String?
+  operatorDept    String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  case            Case            @relation(fields: [caseId], references: [id])
+  attendees       MeetingAttendee[]
+  clueRelations   MeetingClue[]
+  evidenceRelations MeetingEvidence[]
+  todoItems       MeetingTodoItem[]
+
+  @@index([caseId])
+  @@index([status])
+  @@index([meetingTime])
+  @@index([createdAt])
+}
+
+model MeetingAttendee {
+  id              String          @id @default(uuid())
+  meetingId       String
+  personId        String?
+  personName      String
+  personDept      String?
+  role            String?
+  note            String?
+  createdAt       DateTime        @default(now())
+
+  meeting         CaseMeetingMinutes @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@index([personId])
+  @@unique([meetingId, personId])
+}
+
+model MeetingClue {
+  id              String          @id @default(uuid())
+  meetingId       String
+  clueId          String
+  discussionPoint String?
+  conclusion      String?
+  createdAt       DateTime        @default(now())
+
+  meeting         CaseMeetingMinutes @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  clue            Clue            @relation(fields: [clueId], references: [id])
+
+  @@index([meetingId])
+  @@index([clueId])
+  @@unique([meetingId, clueId])
+}
+
+model MeetingEvidence {
+  id              String          @id @default(uuid())
+  meetingId       String
+  evidenceId      String
+  discussionPoint String?
+  conclusion      String?
+  createdAt       DateTime        @default(now())
+
+  meeting         CaseMeetingMinutes @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  evidence        Evidence        @relation(fields: [evidenceId], references: [id])
+
+  @@index([meetingId])
+  @@index([evidenceId])
+  @@unique([meetingId, evidenceId])
+}
+
+model MeetingTodoItem {
+  id              String          @id @default(uuid())
+  meetingId       String
+  title           String
+  description     String?
+  priority        String
+  dueDate         DateTime?
+  assigneeId      String?
+  assigneeName    String?
+  assigneeDept    String?
+  status          MeetingTodoStatus @default(PENDING)
+  taskId          String?
+  note            String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  meeting         CaseMeetingMinutes @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  task            CommandTask?    @relation(fields: [taskId], references: [id])
+
+  @@index([meetingId])
+  @@index([status])
+  @@index([assigneeId])
+  @@index([dueDate])
 }
