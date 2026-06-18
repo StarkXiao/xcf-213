@@ -17,6 +17,7 @@ interface PersonItem {
   occupation: string;
   personType: string;
   createdAt: string;
+  tags: { id: string; name: string; category: string; color?: string }[];
   _count: { casePersons: number; cluePersons: number };
 }
 
@@ -26,6 +27,13 @@ const personTypeColors: Record<string, string> = {
   '证人': 'green',
   '关系人': 'blue',
   '其他': 'default',
+};
+
+const categoryColors: Record<string, string> = {
+  '案件类型': '#1677ff',
+  '线索来源': '#52c41a',
+  '关系角色': '#722ed1',
+  '自定义': '#fa8c16',
 };
 
 export default function PersonList() {
@@ -73,6 +81,7 @@ export default function PersonList() {
     if (values.keyword) filters.keyword = values.keyword;
     if (values.personType) filters.personType = values.personType;
     if (values.gender) filters.gender = values.gender;
+    if (values.tags && values.tags.length > 0) filters.tags = values.tags.join(',');
     setPagination(prev => ({ ...prev, current: 1 }));
     loadData(filters);
   };
@@ -120,6 +129,27 @@ export default function PersonList() {
       key: 'personType',
       width: 100,
       render: (text) => <Tag color={personTypeColors[text]}>{text}</Tag>,
+    },
+    {
+      title: '标签',
+      dataIndex: 'tags',
+      key: 'tags',
+      width: 220,
+      render: (tags: PersonItem['tags']) => {
+        if (!tags || tags.length === 0) return <span style={{ color: '#ccc' }}>-</span>;
+        const display = tags.slice(0, 3);
+        const extra = tags.length - 3;
+        return (
+          <Space size={[4, 4]} wrap>
+            {display.map(t => (
+              <Tag key={t.id} color={t.color || categoryColors[t.category] || 'default'} style={{ margin: 0 }}>
+                {t.name}
+              </Tag>
+            ))}
+            {extra > 0 && <Tag style={{ margin: 0 }}>+{extra}</Tag>}
+          </Space>
+        );
+      },
     },
     {
       title: '性别',
@@ -192,6 +222,13 @@ export default function PersonList() {
     },
   ];
 
+  const tagOptions = options.tags || [];
+  const groupedTags = tagOptions.reduce((acc: Record<string, any[]>, t: any) => {
+    if (!acc[t.category]) acc[t.category] = [];
+    acc[t.category].push(t);
+    return acc;
+  }, {});
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -219,6 +256,28 @@ export default function PersonList() {
                 <Select placeholder="选择性别" allowClear options={options.genders?.map((t: string) => ({ label: t, value: t }))} />
               </Form.Item>
             </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Form.Item name="tags" label="标签">
+                <Select
+                  mode="multiple"
+                  placeholder="按标签筛选"
+                  allowClear
+                  maxTagCount="responsive"
+                  style={{ minWidth: 200 }}
+                  options={Object.entries(groupedTags).map(([category, tags]: [string, any]) => ({
+                    label: (
+                      <span style={{ color: categoryColors[category] || '#666', fontWeight: 500 }}>
+                        {category}
+                      </span>
+                    ),
+                    options: (tags as any[]).map(t => ({
+                      label: t.name,
+                      value: t.id,
+                    })),
+                  }))}
+                />
+              </Form.Item>
+            </Col>
             <Col xs={24} sm={24} md={4}>
               <Form.Item>
                 <Space>
@@ -244,7 +303,7 @@ export default function PersonList() {
             showTotal: (total) => `共 ${total} 条记录`,
             onChange: (page, pageSize) => setPagination({ current: page, pageSize, total: pagination.total }),
           }}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1400 }}
         />
       </Card>
     </div>

@@ -7,6 +7,7 @@ interface PersonQuery {
   keyword?: string;
   personType?: string;
   gender?: string;
+  tags?: string;
 }
 
 interface PersonCreate {
@@ -20,13 +21,16 @@ interface PersonCreate {
   description?: string;
   avatar?: string;
   personType: string;
+  tagIds?: string[];
 }
 
-interface PersonUpdate extends Partial<PersonCreate> {}
+interface PersonUpdate extends Partial<Omit<PersonCreate, 'tagIds'>> {
+  tagIds?: string[];
+}
 
 export default async function (fastify: FastifyInstance) {
   fastify.get('/', async (request: FastifyRequest<{ Querystring: PersonQuery }>, reply) => {
-    const { page = 1, pageSize = 10, keyword, personType, gender } = request.query;
+    const { page = 1, pageSize = 10, keyword, personType, gender, tags } = request.query;
     const skip = (page - 1) * pageSize;
 
     const where: any = {};
@@ -42,6 +46,13 @@ export default async function (fastify: FastifyInstance) {
     if (personType) where.personType = personType;
     if (gender) where.gender = gender;
 
+    if (tags) {
+      const tagIds = tags.split(',');
+      where.personTags = {
+        some: { tagId: { in: tagIds } },
+      };
+    }
+
     const [items, total] = await Promise.all([
       prisma.person.findMany({
         where,
@@ -52,12 +63,18 @@ export default async function (fastify: FastifyInstance) {
           _count: {
             select: { casePersons: true, cluePersons: true, relationsAsSubject: true, relationsAsObject: true },
           },
+          personTags: { include: { tag: true } },
         },
       }),
       prisma.person.count({ where }),
     ]);
 
-    return { items, total, page, pageSize };
+    const enrichedItems = items.map((item: any) => ({
+      ...item,
+      tags: item.personTags.map((pt: any) => pt.tag),
+    }));
+
+    return { items: enrichedItems, total, page, pageSize };
   });
 
   fastify.get('/all', async () => {
@@ -68,14 +85,59 @@ export default async function (fastify: FastifyInstance) {
     return persons;
   });
 
-  fastify.get('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+  fastify.get('/tags', async () => {
+    const tags = await prisma.tag.findMany({
+      include: {
+        _count: { select: { personTags: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return tags;
+  });
+
+  fastify.post('/tags', async (request: FastifyRequest<{ Body: { name: string; category: string; color?: string } }>, reply) => {
+    try {
+      const tag = await prisma.tag.create({ data: request.body });
+      return tag;
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        reply.status(400).send({ error: '该分类下已存在同名标签' });
+        return;
+      }
+      reply.status(400).send({ error: '创建标签失败' });
+    }
+  });
+
+  fastify.put('/tags/:tagId', async (request: FastifyRequest<{ Params: { tagId: string }; Body: { name?: string; category?: string; color?: string } }>, reply) => {
+    try {
+      const tag = await prisma.tag.update({
+        where: { id: request.params.tagId },
+        data: request.body,
+      });
+      return tag;
+    } catch (error) {
+      reply.status(404).send({ error: '标签不存在' });
+    }
+  });
+
+  fastify.delete('/tags/:tagId', async (request: FastifyRequest<{ Params: { tagId: string } }>, reply) => {
+    try {
+      await prisma.tag.delete({ where: { id: request.params.tagId } });
+      return { success: true };
+    } catch (error) {
+      reply.status(404).send({ error: '标签不存在' });
+    }
+  });
+
+  fastify.get('/suggest-tags/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const person = await prisma.person.findUnique({
       where: { id: request.params.id },
       include: {
         casePersons: { include: { case: true } },
         cluePersons: { include: { clue: true } },
-        relationsAsSubject: { include: { objectPerson: true } },
-        relationsAsObject: { include: { subjectPerson: true } },
+        relationsAsSubject: true,
+        relationsAsObject: true,
+        personTags: { include: { tag: true } },
       },
     });
 
@@ -84,15 +146,86 @@ export default async function (fastify: FastifyInstance) {
       return;
     }
 
-    return person;
+    const existingTagNames = new Set(person.personTags.map((pt: any) => pt.tag.name));
+
+    const suggestedTags: { name: string; category: string; source: string }[] = [];
+
+    const caseTypes = new Set<string>();
+    person.casePersons.forEach((cp: any) => {
+      if (cp.case.caseType) caseTypes.add(cp.case.caseType);
+    });
+    caseTypes.forEach(ct => {
+      if (!existingTagNames.has(ct)) {
+        suggestedTags.push({ name: ct, category: '案件类型', source: '关联案件' });
+      }
+    });
+
+    const clueSources = new Set<string>();
+    person.cluePersons.forEach((cp: any) => {
+      if (cp.clue.source) clueSources.add(cp.clue.source);
+    });
+    clueSources.forEach(cs => {
+      if (!existingTagNames.has(cs)) {
+        suggestedTags.push({ name: cs, category: '线索来源', source: '关联线索' });
+      }
+    });
+
+    const roles = new Set<string>();
+    person.casePersons.forEach((cp: any) => {
+      if (cp.role) roles.add(cp.role);
+    });
+    person.cluePersons.forEach((cp: any) => {
+      if (cp.relation) roles.add(cp.relation);
+    });
+    roles.forEach(role => {
+      if (!existingTagNames.has(role)) {
+        suggestedTags.push({ name: role, category: '关系角色', source: '关联关系' });
+      }
+    });
+
+    return { suggested: suggestedTags, existing: person.personTags.map((pt: any) => pt.tag) };
+  });
+
+  fastify.get('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const person = await prisma.person.findUnique({
+      where: { id: request.params.id },
+      include: {
+        casePersons: { include: { case: true } },
+        cluePersons: { include: { clue: true } },
+        relationsAsSubject: { include: { objectPerson: true } },
+        relationsAsObject: { include: { subjectPerson: true } },
+        personTags: { include: { tag: true } },
+      },
+    });
+
+    if (!person) {
+      reply.status(404).send({ error: '人员不存在' });
+      return;
+    }
+
+    const { personTags, ...rest } = person;
+    return {
+      ...rest,
+      tags: personTags.map((pt: any) => pt.tag),
+    };
   });
 
   fastify.post('/', async (request: FastifyRequest<{ Body: PersonCreate }>, reply) => {
     try {
+      const { tagIds, ...personData } = request.body;
       const person = await prisma.person.create({
-        data: request.body,
+        data: {
+          ...personData,
+          personTags: tagIds?.length
+            ? { createMany: { data: tagIds.map((tagId: string) => ({ tagId })) } }
+            : undefined,
+        },
+        include: { personTags: { include: { tag: true } } },
       });
-      return person;
+      return {
+        ...person,
+        tags: person.personTags.map((pt: any) => pt.tag),
+      };
     } catch (error) {
       reply.status(400).send({ error: '创建失败' });
     }
@@ -100,11 +233,29 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.put('/:id', async (request: FastifyRequest<{ Params: { id: string }; Body: PersonUpdate }>, reply) => {
     try {
+      const { tagIds, ...personData } = request.body;
+
+      if (tagIds !== undefined) {
+        await prisma.personTag.deleteMany({ where: { personId: request.params.id } });
+        if (tagIds.length > 0) {
+          await prisma.personTag.createMany({
+            data: tagIds.map((tagId: string) => ({
+              personId: request.params.id,
+              tagId,
+            })),
+          });
+        }
+      }
+
       const person = await prisma.person.update({
         where: { id: request.params.id },
-        data: request.body,
+        data: personData,
+        include: { personTags: { include: { tag: true } } },
       });
-      return person;
+      return {
+        ...person,
+        tags: person.personTags.map((pt: any) => pt.tag),
+      };
     } catch (error) {
       reply.status(404).send({ error: '人员不存在' });
     }
@@ -113,6 +264,7 @@ export default async function (fastify: FastifyInstance) {
   fastify.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     try {
       await prisma.$transaction([
+        prisma.personTag.deleteMany({ where: { personId: request.params.id } }),
         prisma.casePerson.deleteMany({ where: { personId: request.params.id } }),
         prisma.cluePerson.deleteMany({ where: { personId: request.params.id } }),
         prisma.personRelation.deleteMany({

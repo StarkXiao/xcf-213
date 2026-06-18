@@ -27,6 +27,7 @@ interface AdvancedSearchQuery {
   endDate?: string;
   occurStartDate?: string;
   occurEndDate?: string;
+  tagIds?: string | string[];
 }
 
 interface CrossCaseDedupeQuery {
@@ -181,6 +182,7 @@ export default async function (fastify: FastifyInstance) {
       endDate,
       occurStartDate,
       occurEndDate,
+      tagIds,
     } = request.query;
 
     const dateFilter: any = {};
@@ -243,6 +245,10 @@ export default async function (fastify: FastifyInstance) {
     const personTypes = toArray(personType);
     if (personTypes) personWhere.personType = { in: personTypes };
     if (gender) personWhere.gender = gender;
+    const personTagIds = toArray(tagIds);
+    if (personTagIds) {
+      personWhere.personTags = { some: { tagId: { in: personTagIds } } };
+    }
     if (Object.keys(dateFilter).length) personWhere.createdAt = dateFilter;
 
     const evidenceWhere: any = {};
@@ -273,6 +279,7 @@ export default async function (fastify: FastifyInstance) {
         where: personWhere,
         take: 100,
         orderBy: { createdAt: 'desc' },
+        include: { personTags: { include: { tag: true } } },
       }),
       prisma.evidence.findMany({
         where: evidenceWhere,
@@ -833,6 +840,12 @@ export default async function (fastify: FastifyInstance) {
   });
 
   fastify.get('/options', async () => {
+    const tagCategories = ['案件类型', '线索来源', '关系角色', '自定义'];
+    const tags = await prisma.tag.findMany({
+      include: { _count: { select: { personTags: true } } },
+      orderBy: { name: 'asc' },
+    });
+
     return {
       caseTypes: ['专案', '刑事案件', '治安案件', '经济案件', '毒品案件', '网络犯罪', '其他'],
       caseStatuses: ['待立案', '已立案', '侦查中', '已移送起诉', '已判决', '已结案', '已撤销'],
@@ -852,6 +865,8 @@ export default async function (fastify: FastifyInstance) {
       evidenceStatuses: ['待鉴定', '已鉴定', '已入库', '已移送', '已返还', '已销毁'],
       collectionMethods: ['现场勘查提取', '搜查扣押', '调取证据', '证人提供', '犯罪嫌疑人提交', '技术侦查获取', '其他'],
       departments: ['刑侦大队', '重案中队', '技术中队', '情报中队', '派出所', '其他'],
+      tagCategories,
+      tags,
     };
   });
 }

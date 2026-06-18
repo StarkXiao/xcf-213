@@ -52,6 +52,12 @@ export const personApi = {
   getRelations: (id: string) => api.get(`/persons/${id}/relations`),
   getAllRelations: () => api.get('/persons/relations/all'),
   addRelation: (id: string, data: any) => api.post(`/persons/${id}/relations`, data),
+  getRelationTimeline: (id: string) => api.get(`/persons/${id}/relation-timeline`),
+  listTags: () => api.get('/persons/tags'),
+  createTag: (data: { name: string; category: string; color?: string }) => api.post('/persons/tags', data),
+  updateTag: (tagId: string, data: { name?: string; category?: string; color?: string }) => api.put(`/persons/tags/${tagId}`, data),
+  deleteTag: (tagId: string) => api.delete(`/persons/tags/${tagId}`),
+  suggestTags: (id: string) => api.get(`/persons/suggest-tags/${id}`),
 };
 
 export const relationApi = {

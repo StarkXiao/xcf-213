@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Form, Input, Select, Button, Space, message, Row, Col, InputNumber } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Space, message, Row, Col, InputNumber, Tag, Modal, ColorPicker } from 'antd';
+import { ArrowLeftOutlined, SaveOutlined, PlusOutlined } from '@ant-design/icons';
 import { personApi, searchApi } from '../../services/api';
+
+const categoryColors: Record<string, string> = {
+  '案件类型': '#1677ff',
+  '线索来源': '#52c41a',
+  '关系角色': '#722ed1',
+  '自定义': '#fa8c16',
+};
 
 export default function PersonForm() {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +17,10 @@ export default function PersonForm() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<any>({});
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [tagForm] = Form.useForm();
+  const [tagCreating, setTagCreating] = useState(false);
   const isEdit = !!id;
 
   useEffect(() => {
@@ -32,7 +43,11 @@ export default function PersonForm() {
     setLoading(true);
     try {
       const res = await personApi.get(id!);
-      form.setFieldsValue(res.data);
+      const data = res.data;
+      form.setFieldsValue(data);
+      if (data.tags) {
+        setSelectedTagIds(data.tags.map((t: any) => t.id));
+      }
     } catch (error) {
       message.error('加载失败');
     } finally {
@@ -43,11 +58,12 @@ export default function PersonForm() {
   const handleSubmit = async (values: any) => {
     setLoading(true);
     try {
+      const submitData = { ...values, tagIds: selectedTagIds };
       if (isEdit) {
-        await personApi.update(id!, values);
+        await personApi.update(id!, submitData);
         message.success('更新成功');
       } else {
-        await personApi.create(values);
+        await personApi.create(submitData);
         message.success('创建成功');
       }
       navigate('/persons');
@@ -57,6 +73,38 @@ export default function PersonForm() {
       setLoading(false);
     }
   };
+
+  const handleCreateTag = async (values: any) => {
+    setTagCreating(true);
+    try {
+      const color = typeof values.color === 'string' ? values.color : values.color?.toHexString?.() || undefined;
+      const res = await personApi.createTag({ ...values, color });
+      message.success('标签创建成功');
+      setSelectedTagIds(prev => [...prev, res.data.id]);
+      setTagModalOpen(false);
+      tagForm.resetFields();
+      loadOptions();
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || '创建标签失败';
+      message.error(errorMsg);
+    } finally {
+      setTagCreating(false);
+    }
+  };
+
+  const tagOptions = options.tags || [];
+  const tagSelectOptions = tagOptions.map((t: any) => ({
+    label: (
+      <Space>
+        <Tag color={t.color || categoryColors[t.category] || 'default'} style={{ margin: 0 }}>
+          {t.name}
+        </Tag>
+        <span style={{ fontSize: 12, color: '#999' }}>{t.category}</span>
+      </Space>
+    ),
+    value: t.id,
+    tag: t,
+  }));
 
   return (
     <div className="page-container">
@@ -136,6 +184,49 @@ export default function PersonForm() {
             </Col>
 
             <Col xs={24}>
+              <Form.Item label="标签">
+                <Select
+                  mode="multiple"
+                  placeholder="选择或搜索标签"
+                  value={selectedTagIds}
+                  onChange={setSelectedTagIds}
+                  options={tagSelectOptions}
+                  optionFilterProp="label"
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <div style={{ padding: '8px', borderTop: '1px solid #f0f0f0' }}>
+                        <Button
+                          type="link"
+                          icon={<PlusOutlined />}
+                          onClick={() => setTagModalOpen(true)}
+                          style={{ padding: 0 }}
+                        >
+                          新建标签
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                  tagRender={(props) => {
+                    const { value, closable, onClose } = props;
+                    const tag = tagOptions.find((t: any) => t.id === value);
+                    if (!tag) return <span />;
+                    return (
+                      <Tag
+                        color={tag.color || categoryColors[tag.category] || 'default'}
+                        closable={closable}
+                        onClose={onClose}
+                        style={{ marginRight: 3 }}
+                      >
+                        {tag.name}
+                      </Tag>
+                    );
+                  }}
+                />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24}>
               <Form.Item name="description" label="人员描述">
                 <Input.TextArea
                   rows={4}
@@ -157,6 +248,46 @@ export default function PersonForm() {
           </Form.Item>
         </Form>
       </Card>
+
+      <Modal
+        title="新建标签"
+        open={tagModalOpen}
+        onCancel={() => { setTagModalOpen(false); tagForm.resetFields(); }}
+        onOk={() => tagForm.submit()}
+        confirmLoading={tagCreating}
+      >
+        <Form form={tagForm} layout="vertical" onFinish={handleCreateTag}>
+          <Form.Item
+            name="name"
+            label="标签名称"
+            rules={[{ required: true, message: '请输入标签名称' }]}
+          >
+            <Input placeholder="请输入标签名称" maxLength={50} />
+          </Form.Item>
+          <Form.Item
+            name="category"
+            label="标签分类"
+            rules={[{ required: true, message: '请选择标签分类' }]}
+            initialValue="自定义"
+          >
+            <Select
+              placeholder="请选择标签分类"
+              options={(options.tagCategories || ['案件类型', '线索来源', '关系角色', '自定义']).map((c: string) => ({
+                label: (
+                  <Space>
+                    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: categoryColors[c] || '#999' }} />
+                    {c}
+                  </Space>
+                ),
+                value: c,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="color" label="标签颜色">
+            <ColorPicker />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
