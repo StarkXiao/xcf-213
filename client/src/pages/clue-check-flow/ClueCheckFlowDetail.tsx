@@ -20,6 +20,7 @@ import {
   Tooltip,
   Divider,
   Empty,
+  Alert,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -40,6 +41,7 @@ import {
   ExclamationCircleOutlined,
   StopOutlined,
   PlusOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import moment from 'moment';
@@ -52,6 +54,7 @@ import {
   operationLogApi,
 } from '../../services/api';
 import { checkStatusMap, checkStageMap, priorityMap } from './ClueCheckFlowList';
+import ApprovalInfoPanel from '../../components/ApprovalInfoPanel';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -184,6 +187,11 @@ export default function ClueCheckFlowDetail() {
     flowData && ['VERIFYING'].includes(flowData.status);
   const canAdopt = () =>
     flowData && ['FEEDBACKED'].includes(flowData.status);
+  const canAdoptWithApproval = () =>
+    canAdopt() && flowData.clueAdoptApproval && flowData.clueAdoptApproval.status === 'APPROVED';
+  const hasPendingApproval = () =>
+    canAdopt() && flowData.clueAdoptApproval &&
+    ['PENDING', 'IN_PROGRESS'].includes(flowData.clueAdoptApproval.status);
   const canReject = () =>
     flowData && ['FEEDBACKED', 'VERIFYING', 'DISPATCHED'].includes(flowData.status);
   const canClose = () =>
@@ -530,17 +538,43 @@ export default function ClueCheckFlowDetail() {
                       <Space style={{ marginBottom: 8 }}>
                         <TrophyOutlined style={{ color: '#52c41a' }} />
                         <span style={{ fontWeight: 500, fontSize: 13 }}>采用</span>
+                        {canAdoptWithApproval() && <Tag color="green">审批已通过</Tag>}
+                        {hasPendingApproval() && <Tag color="blue">审批中</Tag>}
                       </Space>
-                      <Button
-                        type={canAdopt() ? 'primary' : 'default'}
-                        icon={<TrophyOutlined />}
-                        disabled={!canAdopt()}
-                        onClick={openAdopt}
-                        block
-                        style={{ background: canAdopt() ? '#52c41a' : undefined }}
-                      >
-                        采纳结果
-                      </Button>
+                      {canAdoptWithApproval() ? (
+                        <Button
+                          type="primary"
+                          icon={<TrophyOutlined />}
+                          onClick={openAdopt}
+                          block
+                          style={{ background: '#52c41a' }}
+                        >
+                          执行采用
+                        </Button>
+                      ) : canAdopt() && !hasPendingApproval() ? (
+                        <Tooltip title="需先发起线索采用审批，审批通过后方可采用">
+                          <Button
+                            type="primary"
+                            icon={<AuditOutlined />}
+                            onClick={() => {
+                              const el = document.getElementById('clue-check-approval-panel');
+                              if (el) el.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            block
+                          >
+                            发起采用审批
+                          </Button>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          type="default"
+                          icon={<TrophyOutlined />}
+                          disabled
+                          block
+                        >
+                          {hasPendingApproval() ? '审批中，请等待' : '采纳结果'}
+                        </Button>
+                      )}
                     </div>
                   </Col>
                   <Col span={12}>
@@ -979,6 +1013,46 @@ export default function ClueCheckFlowDetail() {
             </Card>
           </Col>
         </Row>
+
+        {canAdopt() && !canAdoptWithApproval() && (
+          <Alert
+            message="线索采用需通过多级审批"
+            description={
+              hasPendingApproval()
+                ? '线索采用审批正在进行中，请等待审批完成。审批通过后方可执行采用操作。'
+                : '请点击下方「发起采用审批」按钮发起线索采用审批流程，审批通过后方可执行采用操作。'
+            }
+            type="warning"
+            showIcon
+            style={{ marginTop: 16 }}
+          />
+        )}
+
+        <div id="clue-check-approval-panel" style={{ marginTop: 16 }}>
+          <Card
+            size="small"
+            title={
+              <Space>
+                <AuditOutlined style={{ color: '#722ed1' }} />
+                审批信息
+              </Space>
+            }
+          >
+            <ApprovalInfoPanel
+              targetType="CLUE"
+              targetId={flowData.clueId || id!}
+              targetName={flowData.clue?.title || flowData.title}
+              targetNumber={flowData.clue?.clueNumber || flowData.flowNumber}
+              clueId={flowData.clueId}
+              caseId={flowData.caseId}
+              approvals={flowData.approvals}
+              currentApproval={flowData.clueAdoptApproval}
+              allowedCategories={['CLUE_ADOPT']}
+              onApprovalCreated={loadFlowData}
+              onApprovalStatusChange={loadFlowData}
+            />
+          </Card>
+        </div>
       </div>
     ),
   };

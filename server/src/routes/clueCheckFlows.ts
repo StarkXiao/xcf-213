@@ -252,7 +252,51 @@ export default async function (fastify: FastifyInstance) {
       return;
     }
 
-    return flow;
+    let approvals: any[] = [];
+    let clueAdoptApproval: any = null;
+
+    if (flow.clueId) {
+      approvals = await prisma.approvalInstance.findMany({
+        where: { targetId: flow.clueId, targetType: 'CLUE' },
+        include: {
+          records: { orderBy: { actionTime: 'desc' } },
+          flow: { include: { nodes: { orderBy: { level: 'asc' } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      clueAdoptApproval = await prisma.approvalInstance.findFirst({
+        where: {
+          targetId: flow.clueId,
+          targetType: 'CLUE',
+          category: 'CLUE_ADOPT',
+          status: { in: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'ROLLED_BACK'] },
+        },
+        include: {
+          records: { orderBy: { actionTime: 'desc' } },
+          flow: { include: { nodes: { orderBy: { level: 'asc' } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    const transformApproval = (a: any) => ({
+      ...a,
+      categoryLabel: a.category === 'CLUE_ADOPT' ? '线索采用' : a.category,
+      statusLabel:
+        a.status === 'PENDING' ? '待审批' :
+        a.status === 'IN_PROGRESS' ? '审批中' :
+        a.status === 'APPROVED' ? '已通过' :
+        a.status === 'REJECTED' ? '已驳回' :
+        a.status === 'ROLLED_BACK' ? '已回退' :
+        a.status === 'CANCELLED' ? '已取消' : a.status,
+    });
+
+    return {
+      ...flow,
+      approvals: approvals.map(transformApproval),
+      clueAdoptApproval: clueAdoptApproval ? transformApproval(clueAdoptApproval) : null,
+    };
   });
 
   fastify.post('/register', async (request: FastifyRequest<{ Body: ClueCheckRegisterCreate }>, reply) => {
@@ -602,6 +646,24 @@ export default async function (fastify: FastifyInstance) {
       if (!beforeFlow) {
         reply.status(404).send({ error: '核查流程不存在' });
         return;
+      }
+
+      if (beforeFlow.clueId) {
+        const approvedApproval = await prisma.approvalInstance.findFirst({
+          where: {
+            targetId: beforeFlow.clueId,
+            targetType: 'CLUE',
+            category: 'CLUE_ADOPT',
+            status: 'APPROVED',
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!approvedApproval) {
+          return reply.status(400).send({
+            error: '线索采用需先通过多级审批，请先在核查详情页发起线索采用审批流程。审批通过后方可执行采用操作。',
+            code: 'APPROVAL_REQUIRED',
+          });
+        }
       }
 
       const updateData: any = {
