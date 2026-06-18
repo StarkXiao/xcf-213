@@ -5,6 +5,7 @@ import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, UserOutl
 import moment from 'moment';
 import ReactECharts from 'echarts-for-react';
 import { caseApi, personApi, clueApi, evidenceApi, caseMeetingApi, forensicApi } from '../../services/api';
+import CaseTimeline from '../../components/CaseTimeline';
 
 const statusColors: Record<string, string> = {
   '待立案': 'default',
@@ -1554,6 +1555,22 @@ export default function CaseDetail() {
             <Empty description="暂无会商纪要" />
           )}
         </div>
+      ),
+    },
+    {
+      key: 'timeline',
+      label: (
+        <Space>
+          <ClockCircleOutlined style={{ color: '#1677ff' }} />
+          案件时间轴
+        </Space>
+      ),
+      children: (
+        <CaseTimeline
+          targetType="CASE"
+          targetId={id!}
+          navigate={navigate}
+        />
       ),
     },
   ];

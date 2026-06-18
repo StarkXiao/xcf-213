@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col, AutoComplete, Empty, Table } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined, CoffeeOutlined, ScanOutlined, DisconnectOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined, CoffeeOutlined, ScanOutlined, DisconnectOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import { clueApi, personApi, evidenceApi, caseMeetingApi, forensicApi } from '../../services/api';
+import CaseTimeline from '../../components/CaseTimeline';
 
 const statusColors: Record<string, string> = {
   '待核实': 'default',
@@ -860,6 +861,22 @@ export default function ClueDetail() {
             />
           </Card>
         </div>
+      ),
+    },
+    {
+      key: 'timeline',
+      label: (
+        <Space>
+          <ClockCircleOutlined style={{ color: '#1677ff' }} />
+          案件时间轴
+        </Space>
+      ),
+      children: (
+        <CaseTimeline
+          targetType="CLUE"
+          targetId={id!}
+          navigate={navigate}
+        />
       ),
     },
   ];

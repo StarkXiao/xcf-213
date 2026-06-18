@@ -302,4 +302,17 @@ export const forensicApi = {
   getBatch: (id: string) => api.get(`/forensics/batches/${id}`),
 };
 
+export const timelineApi = {
+  list: (params?: any) => api.get('/timelines', { params }),
+  get: (id: string) => api.get(`/timelines/${id}`),
+  create: (data: any) => api.post('/timelines', data),
+  update: (id: string, data: any) => api.put(`/timelines/${id}`, data),
+  delete: (id: string) => api.delete(`/timelines/${id}`),
+  batch: (data: { ids: string[]; action: 'IMPORTANT' | 'NORMAL' | 'DELETE' }) =>
+    api.post('/timelines/batch', data),
+  getOptions: () => api.get('/timelines/options'),
+  getAggregate: (targetType: 'CASE' | 'CLUE', targetId: string) =>
+    api.get(`/timelines/aggregate/${targetType}/${targetId}`),
+};
+
 export default api;

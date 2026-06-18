@@ -21,6 +21,7 @@ export enum TargetType {
   MEETING_CLUE = 'MEETING_CLUE',
   MEETING_EVIDENCE = 'MEETING_EVIDENCE',
   MEETING_TODO = 'MEETING_TODO',
+  TIMELINE = 'TIMELINE',
 }
 
 export enum ActionType {
