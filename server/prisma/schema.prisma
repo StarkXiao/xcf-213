@@ -38,6 +38,7 @@ model Case {
   personRelations PersonRelation[]
   evidenceBorrows EvidenceBorrow[]
   evidenceBatches EvidenceBatch[] @relation("BatchCase")
+  evidenceTransfers EvidenceTransfer[]
   sourceRelations CaseRelation[] @relation("SourceCase")
   targetRelations CaseRelation[] @relation("TargetCase")
   commandTasks CommandTask[]
@@ -122,6 +123,7 @@ model Clue {
   cluePersons CluePerson[]
   evidenceBorrows EvidenceBorrow[]
   evidenceBatches EvidenceBatch[] @relation("BatchClue")
+  evidenceTransfers EvidenceTransfer[]
   verifications ClueVerification[]
   commandTasks CommandTask[]
 }
@@ -199,7 +201,123 @@ model Evidence {
   clue               Clue?               @relation(fields: [clueId], references: [id])
   clueVerification   ClueVerification?   @relation(fields: [clueVerificationId], references: [id])
   borrowRecords      EvidenceBorrow[]
+  transfers          EvidenceTransfer[]
   commandTasks       CommandTask[]
+}
+
+// 证据流转类型枚举
+enum EvidenceTransferType {
+  STORAGE_IN
+  BORROW
+  TRANSFER
+  RETURN
+  DESTROY
+  SEAL
+  UNSEAL
+}
+
+// 证据流转状态枚举
+enum EvidenceTransferStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// 证据流转记录表 - 管理入库、借阅、移交、归还、销毁全流程
+model EvidenceTransfer {
+  id              String                  @id @default(uuid())
+  transferNumber  String                  @unique
+  evidenceId      String
+  caseId          String?
+  clueId          String?
+  transferType    EvidenceTransferType
+  status          EvidenceTransferStatus  @default(PENDING)
+  priority        String?
+
+  fromDepartment  String?
+  fromPerson      String?
+  toDepartment    String?
+  toPerson        String?
+
+  reason          String?
+  description     String?
+  expectedTime    DateTime?
+  actualTime      DateTime?
+
+  applicant       String?
+  applicantDept   String?
+  applyTime       DateTime                @default(now())
+
+  approver        String?
+  approverDept    String?
+  approveTime     DateTime?
+  approveOpinion  String?
+
+  handler         String?
+  handlerDept     String?
+  handleTime      DateTime?
+
+  receiver        String?
+  receiverDept    String?
+  receiveTime     DateTime?
+  receiveRemark   String?
+
+  returner        String?
+  returnerDept    String?
+  returnTime      DateTime?
+  returnRemark    String?
+
+  destroyMethod   String?
+  destroySupervisor String?
+  destroyWitness  String?
+  destroyCertificate String?
+
+  operator        String?
+  operatorDept    String?
+  operationTime   DateTime                @default(now())
+
+  evidence        Evidence                @relation(fields: [evidenceId], references: [id])
+  case            Case?                   @relation(fields: [caseId], references: [id])
+  clue            Clue?                   @relation(fields: [clueId], references: [id])
+  flowLogs        EvidenceTransferLog[]
+
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([evidenceId])
+  @@index([transferType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([fromPerson])
+  @@index([toPerson])
+  @@index([applicant])
+}
+
+// 证据流转日志表 - 记录流转过程中的每一步操作，用于责任追踪
+model EvidenceTransferLog {
+  id              String                  @id @default(uuid())
+  transferId      String
+  action          String
+  stage           String?
+  description     String?
+  beforeStatus    String?
+  afterStatus     String?
+  operatorId      String?
+  operatorName    String?
+  operatorDept    String?
+  ip              String?
+  userAgent       String?
+  actionTime      DateTime                @default(now())
+  remark          String?
+
+  transfer        EvidenceTransfer        @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+  @@index([action])
+  @@index([actionTime])
+  @@index([operatorName])
 }
 
 // 证据借阅记录表

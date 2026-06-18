@@ -113,6 +113,27 @@ export const evidenceApi = {
   download: (id: string) => api.get(`/evidences/${id}/download`, { responseType: 'blob' }),
   getCases: () => api.get('/evidences/cases'),
   getClues: (caseId: string) => api.get(`/evidences/cases/${caseId}/clues`),
+  getBorrowRecords: (id: string, params?: any) => api.get(`/evidences/${id}/borrow-records`, { params }),
+  borrow: (id: string, data: any) => api.post(`/evidences/${id}/borrow`, data),
+  return: (id: string, data: any) => api.put(`/evidences/${id}/return`, data),
+  listAllBorrowRecords: (params?: any) => api.get('/evidences/borrow-records/all', { params }),
+};
+
+export const evidenceTransferApi = {
+  list: (params?: any) => api.get('/evidence-transfers', { params }),
+  get: (id: string) => api.get(`/evidence-transfers/${id}`),
+  create: (data: any) => api.post('/evidence-transfers', data),
+  approve: (id: string, data: any) => api.post(`/evidence-transfers/${id}/approve`, data),
+  handle: (id: string, data: any) => api.post(`/evidence-transfers/${id}/handle`, data),
+  receive: (id: string, data: any) => api.post(`/evidence-transfers/${id}/receive`, data),
+  return: (id: string, data: any) => api.post(`/evidence-transfers/${id}/return`, data),
+  destroy: (id: string, data: any) => api.post(`/evidence-transfers/${id}/destroy`, data),
+  cancel: (id: string, data: any) => api.put(`/evidence-transfers/${id}/cancel`, data),
+  delete: (id: string) => api.delete(`/evidence-transfers/${id}`),
+  getLogs: (id: string, params?: any) => api.get(`/evidence-transfers/${id}/logs`, { params }),
+  getByEvidence: (evidenceId: string, params?: any) => api.get(`/evidence-transfers/evidence/${evidenceId}`, { params }),
+  getStats: () => api.get('/evidence-transfers/stats'),
+  getResponsibilityTrace: (params?: any) => api.get('/evidence-transfers/responsibility/trace', { params }),
 };
 
 export const searchApi = {

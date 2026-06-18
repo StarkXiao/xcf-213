@@ -15,6 +15,8 @@ import RelationGraph from './pages/relations/RelationGraph';
 import EvidenceList from './pages/evidences/EvidenceList';
 import EvidenceDetail from './pages/evidences/EvidenceDetail';
 import EvidenceUpload from './pages/evidences/EvidenceUpload';
+import EvidenceTransferList from './pages/evidence-transfers/EvidenceTransferList';
+import EvidenceTransferDetail from './pages/evidence-transfers/EvidenceTransferDetail';
 import AdvancedSearch from './pages/search/AdvancedSearch';
 import OperationLogList from './pages/logs/OperationLogList';
 import CrossCaseAnalysis from './pages/analysis/CrossCaseAnalysis';
@@ -54,6 +56,9 @@ function App() {
             <Route path="/evidences" element={<EvidenceList />} />
             <Route path="/evidences/upload" element={<EvidenceUpload />} />
             <Route path="/evidences/:id" element={<EvidenceDetail />} />
+
+            <Route path="/evidence-transfers" element={<EvidenceTransferList />} />
+            <Route path="/evidence-transfers/:id" element={<EvidenceTransferDetail />} />
 
             <Route path="/search" element={<AdvancedSearch />} />
 

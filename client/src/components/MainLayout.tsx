@@ -12,6 +12,7 @@ import {
   ClusterOutlined,
   SolutionOutlined,
   WarningOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -61,6 +62,11 @@ const menuItems = [
     key: '/evidences',
     icon: <PaperClipOutlined />,
     label: '证据附件',
+  },
+  {
+    key: '/evidence-transfers',
+    icon: <SwapOutlined />,
+    label: '证据流转与保全',
   },
   {
     key: '/search',
