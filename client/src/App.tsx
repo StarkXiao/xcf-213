@@ -31,6 +31,9 @@ import SurveillanceRuleList from './pages/surveillance/SurveillanceRuleList';
 import SurveillanceRuleForm from './pages/surveillance/SurveillanceRuleForm';
 import AlertList from './pages/surveillance/AlertList';
 import AlertDetail from './pages/surveillance/AlertDetail';
+import ForensicFileList from './pages/forensics/ForensicFileList';
+import ForensicFileDetail from './pages/forensics/ForensicFileDetail';
+import ForensicImport from './pages/forensics/ForensicImport';
 
 const { Content } = Layout;
 
@@ -90,6 +93,10 @@ function App() {
 
             <Route path="/alerts" element={<AlertList />} />
             <Route path="/alerts/:id" element={<AlertDetail />} />
+
+            <Route path="/forensics" element={<ForensicFileList />} />
+            <Route path="/forensics/import" element={<ForensicImport />} />
+            <Route path="/forensics/:id" element={<ForensicFileDetail />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

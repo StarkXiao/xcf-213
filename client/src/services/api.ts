@@ -268,4 +268,38 @@ export const caseMeetingApi = {
   todoToTask: (id: string, todoId: string, data: any) => api.post(`/case-meetings/${id}/todos/${todoId}/to-task`, data),
 };
 
+export const forensicApi = {
+  list: (params?: any) => api.get('/forensics', { params }),
+  get: (id: string) => api.get(`/forensics/${id}`),
+  create: (data: any) => api.post('/forensics', data),
+  update: (id: string, data: any) => api.put(`/forensics/${id}`, data),
+  delete: (id: string) => api.delete(`/forensics/${id}`),
+  getStats: () => api.get('/forensics/stats'),
+  getOptions: () => api.get('/forensics/options'),
+  uploadBatch: (formData: FormData, onProgress?: (progress: number) => void) =>
+    api.post('/forensics/upload-batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percentCompleted);
+        }
+      },
+    }),
+  verifyHashes: (ids: string[]) => api.post('/forensics/verify-hashes', { forensicFileIds: ids }),
+  download: (id: string) => api.post(`/forensics/${id}/download`, {}, { responseType: 'blob' }),
+  getCases: () => api.get('/forensics/options').then(res => res.data.cases),
+  getClues: (caseId: string) => api.get(`/forensics/cases/${caseId}/clues`),
+  bindCase: (data: { forensicFileId: string; caseId: string; relationType?: string; description?: string }) =>
+    api.post('/forensics/bind-case', data),
+  unbindCase: (data: { forensicFileId: string; caseId: string }) =>
+    api.post('/forensics/unbind-case', data),
+  bindClue: (data: { forensicFileId: string; clueId: string; relationType?: string; description?: string }) =>
+    api.post('/forensics/bind-clue', data),
+  unbindClue: (data: { forensicFileId: string; clueId: string }) =>
+    api.post('/forensics/unbind-clue', data),
+  listBatches: (params?: any) => api.get('/forensics/batches', { params }),
+  getBatch: (id: string) => api.get(`/forensics/batches/${id}`),
+};
+
 export default api;

@@ -16,6 +16,7 @@ import {
   CoffeeOutlined,
   SafetyCertificateOutlined,
   BellOutlined,
+  ScanOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider } = Layout;
@@ -87,6 +88,21 @@ const menuItems = [
     label: '证据流转与保全',
   },
   {
+    key: '/forensics',
+    icon: <ScanOutlined />,
+    label: '电子数据取证',
+    children: [
+      {
+        key: '/forensics',
+        label: '取证文件管理',
+      },
+      {
+        key: '/forensics/import',
+        label: '批量导入',
+      },
+    ],
+  },
+  {
     key: '/search',
     icon: <FilterOutlined />,
     label: '查询筛选',
@@ -109,9 +125,34 @@ export default function MainLayout({ children }: MainLayoutProps) {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
-  const selectedKey = menuItems.find((item) =>
-    location.pathname.startsWith(item.key)
-  )?.key || '/dashboard';
+  const findSelectedKey = (items: any[], pathname: string): string | undefined => {
+    for (const item of items) {
+      if (item.children) {
+        const childKey = findSelectedKey(item.children, pathname);
+        if (childKey) return childKey;
+      }
+      if (pathname.startsWith(item.key)) {
+        return item.key;
+      }
+    }
+    return undefined;
+  };
+
+  const findOpenKey = (items: any[], pathname: string): string | undefined => {
+    for (const item of items) {
+      if (item.children) {
+        if (pathname.startsWith(item.key)) {
+          return item.key;
+        }
+        const childKey = findOpenKey(item.children, pathname);
+        if (childKey) return item.key;
+      }
+    }
+    return undefined;
+  };
+
+  const selectedKey = findSelectedKey(menuItems, location.pathname) || '/dashboard';
+  const openKey = findOpenKey(menuItems, location.pathname);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -150,6 +191,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
+            defaultOpenKeys={openKey ? [openKey] : []}
             items={menuItems}
             onClick={({ key }) => navigate(key as string)}
             style={{ height: '100%', borderRight: 0, paddingTop: '16px' }}

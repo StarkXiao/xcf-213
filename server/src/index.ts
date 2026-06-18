@@ -20,6 +20,7 @@ import riskProfileRoutes from './routes/riskProfiles';
 import caseMeetingMinutesRoutes from './routes/caseMeetingMinutes';
 import surveillanceRuleRoutes from './routes/surveillanceRules';
 import alertRoutes from './routes/alerts';
+import forensicRoutes from './routes/forensics';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -67,6 +68,7 @@ server.register(riskProfileRoutes, { prefix: '/api/risk-profiles' });
 server.register(caseMeetingMinutesRoutes, { prefix: '/api/case-meetings' });
 server.register(surveillanceRuleRoutes, { prefix: '/api/surveillance-rules' });
 server.register(alertRoutes, { prefix: '/api/alerts' });
+server.register(forensicRoutes, { prefix: '/api/forensics' });
 
 const start = async () => {
   try {
