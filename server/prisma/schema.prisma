@@ -50,6 +50,183 @@ model Case {
   forensicFiles ForensicFile[]
   forensicFileRelations ForensicFileCase[]
   timelineEvents TimelineEvent[]
+  externalInvestigations ExternalInvestigation[]
+}
+
+// 外部协查状态枚举
+enum ExternalInvestigationStatus {
+  DRAFT
+  PENDING
+  SENT
+  RESPONDED
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+// 协查优先级枚举
+enum ExternalInvestigationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// 协查类型枚举
+enum ExternalInvestigationType {
+  PERSON_VERIFY
+  EVIDENCE_COLLECT
+  ASSET_QUERY
+  COMMUNICATION_QUERY
+  SURVEILLANCE
+  DOCUMENT_VERIFY
+  OTHER
+}
+
+// 外部协查主表
+model ExternalInvestigation {
+  id                 String                         @id @default(uuid())
+  investigationNumber String                        @unique
+  caseId             String?
+  clueId             String?
+  title              String
+  investigationType  ExternalInvestigationType
+  priority           ExternalInvestigationPriority @default(MEDIUM)
+  status             ExternalInvestigationStatus   @default(DRAFT)
+
+  targetDepartment   String
+  targetContact      String?
+  targetPhone        String?
+  targetAddress      String?
+
+  sourceDepartment   String?
+  sourceContact      String?
+  sourcePhone        String?
+
+  requestContent     String
+  requestRequirement String?
+  legalBasis         String?
+
+  deadline           DateTime?
+  sendTime           DateTime?
+  responseTime       DateTime?
+  completeTime       DateTime?
+
+  responseContent    String?
+  responseResult     String?
+  responseNote       String?
+
+  applicantId        String?
+  applicantName      String?
+  applicantDept      String?
+  applyTime          DateTime                     @default(now())
+
+  approverId         String?
+  approverName       String?
+  approverDept       String?
+  approveTime        DateTime?
+  approveOpinion     String?
+
+  handlerId          String?
+  handlerName        String?
+  handlerDept        String?
+
+  responderId        String?
+  responderName      String?
+  responderDept      String?
+
+  isConfidential     Boolean                        @default(false)
+  confidentialLevel  String?
+
+  attachmentCount    Int                            @default(0)
+  responseAttachmentCount Int                       @default(0)
+
+  remark             String?
+  metadata           String?
+
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  case               Case?                          @relation(fields: [caseId], references: [id])
+  clue               Clue?                          @relation(fields: [clueId], references: [id])
+  attachments        ExternalInvestigationAttachment[]
+  responseAttachments ExternalInvestigationResponseAttachment[]
+  operationLogs      ExternalInvestigationLog[]
+
+  @@index([caseId])
+  @@index([clueId])
+  @@index([status])
+  @@index([priority])
+  @@index([investigationType])
+  @@index([targetDepartment])
+  @@index([applicantName])
+  @@index([deadline])
+  @@index([createdAt])
+}
+
+// 协查请求附件表
+model ExternalInvestigationAttachment {
+  id               String                 @id @default(uuid())
+  investigationId  String
+  fileName         String
+  storedName       String
+  filePath         String
+  fileSize         Int?
+  mimeType         String?
+  description      String?
+  uploaderId       String?
+  uploaderName     String?
+  uploadTime       DateTime               @default(now())
+
+  investigation    ExternalInvestigation  @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@index([investigationId])
+  @@index([uploadTime])
+}
+
+// 协查回函附件表
+model ExternalInvestigationResponseAttachment {
+  id               String                 @id @default(uuid())
+  investigationId  String
+  fileName         String
+  storedName       String
+  filePath         String
+  fileSize         Int?
+  mimeType         String?
+  description      String?
+  uploaderId       String?
+  uploaderName     String?
+  uploadTime       DateTime               @default(now())
+
+  investigation    ExternalInvestigation  @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@index([investigationId])
+  @@index([uploadTime])
+}
+
+// 协查操作日志表
+model ExternalInvestigationLog {
+  id               String                        @id @default(uuid())
+  investigationId  String
+  action           String
+  stage            String?
+  description      String?
+  beforeData       String?
+  afterData        String?
+  operatorId       String?
+  operatorName     String?
+  operatorDept     String?
+  ip               String?
+  userAgent        String?
+  actionTime       DateTime                      @default(now())
+  remark           String?
+
+  investigation    ExternalInvestigation         @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@index([investigationId])
+  @@index([action])
+  @@index([actionTime])
+  @@index([operatorName])
 }
 
 // 人员信息表
@@ -142,6 +319,7 @@ model Clue {
   forensicFiles ForensicFile[]
   forensicFileRelations ForensicFileClue[]
   timelineEvents TimelineEvent[]
+  externalInvestigations ExternalInvestigation[]
 }
 
 // 线索-人员关联表
@@ -1237,6 +1415,10 @@ enum TimelineEventType {
   ALERT_TRIGGER
   RISK_ASSESSMENT
   CLUE_FOUND
+  EXTERNAL_INVESTIGATION_REQUEST
+  EXTERNAL_INVESTIGATION_SEND
+  EXTERNAL_INVESTIGATION_RESPONSE
+  EXTERNAL_INVESTIGATION_COMPLETE
   OTHER
 }
 

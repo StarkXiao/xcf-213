@@ -111,6 +111,10 @@ const eventTypeLabels: Record<string, { label: string; color: string; icon: stri
   ALERT_TRIGGER: { label: '预警触发', color: 'red', icon: 'BellOutlined' },
   RISK_ASSESSMENT: { label: '风险评估', color: 'orange', icon: 'AlertOutlined' },
   CLUE_FOUND: { label: '线索发现', color: 'cyan', icon: 'BulbOutlined' },
+  EXTERNAL_INVESTIGATION_REQUEST: { label: '协查请求', color: 'geekblue', icon: 'SendOutlined' },
+  EXTERNAL_INVESTIGATION_SEND: { label: '协查发出', color: 'blue', icon: 'ShareAltOutlined' },
+  EXTERNAL_INVESTIGATION_RESPONSE: { label: '协查回函', color: 'cyan', icon: 'InboxOutlined' },
+  EXTERNAL_INVESTIGATION_COMPLETE: { label: '协查完成', color: 'green', icon: 'CheckCircleOutlined' },
   OTHER: { label: '其他事件', color: 'default', icon: 'InfoCircleOutlined' },
 };
 
@@ -488,12 +492,57 @@ export default async function (fastify: FastifyInstance) {
           },
     });
 
+    const externalInvestigations = await prisma.externalInvestigation.findMany({
+      where: targetType === 'CASE' ? { caseId: targetId } : { clueId: targetId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        attachments: true,
+        responseAttachments: true,
+      },
+    });
+
+    const investigationTypeLabels: Record<string, string> = {
+      PERSON_VERIFY: '人员核实',
+      EVIDENCE_COLLECT: '证据调取',
+      ASSET_QUERY: '资产查询',
+      COMMUNICATION_QUERY: '通联查询',
+      SURVEILLANCE: '布控协查',
+      DOCUMENT_VERIFY: '文书核实',
+      OTHER: '其他协查',
+    };
+
+    const investigationStatusLabels: Record<string, { label: string; color: string }> = {
+      DRAFT: { label: '草稿', color: 'default' },
+      PENDING: { label: '待审批', color: 'orange' },
+      SENT: { label: '已发出', color: 'blue' },
+      RESPONDED: { label: '已回函', color: 'cyan' },
+      COMPLETED: { label: '已完成', color: 'green' },
+      CANCELLED: { label: '已取消', color: 'gray' },
+      OVERDUE: { label: '已超期', color: 'red' },
+    };
+
+    const now = new Date();
+    const enrichedInvestigations = externalInvestigations.map((inv: any) => {
+      let status = inv.status;
+      const isOverdue = inv.deadline && status === 'SENT' && new Date(inv.deadline) < now;
+      if (isOverdue) status = 'OVERDUE';
+      return {
+        ...inv,
+        status,
+        isOverdue,
+        investigationTypeLabel: investigationTypeLabels[inv.investigationType] || inv.investigationType,
+        statusLabel: investigationStatusLabels[status]?.label || status,
+        statusColor: investigationStatusLabels[status]?.color || 'default',
+      };
+    });
+
     return {
       events,
       verifications,
       evidences,
       forensicFiles,
       meetings,
+      externalInvestigations: enrichedInvestigations,
       eventTypeLabels,
     };
   });

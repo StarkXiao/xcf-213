@@ -23,6 +23,7 @@ import alertRoutes from './routes/alerts';
 import forensicRoutes from './routes/forensics';
 import timelineRoutes from './routes/timelines';
 import approvalRoutes from './routes/approvals';
+import externalInvestigationRoutes from './routes/externalInvestigations';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -73,6 +74,7 @@ server.register(alertRoutes, { prefix: '/api/alerts' });
 server.register(forensicRoutes, { prefix: '/api/forensics' });
 server.register(timelineRoutes, { prefix: '/api/timelines' });
 server.register(approvalRoutes, { prefix: '/api/approvals' });
+server.register(externalInvestigationRoutes, { prefix: '/api/external-investigations' });
 
 const start = async () => {
   try {
