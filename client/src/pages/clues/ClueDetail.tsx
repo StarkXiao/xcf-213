@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col } from 'antd';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col, AutoComplete } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import { clueApi, personApi, evidenceApi } from '../../services/api';
@@ -586,18 +586,17 @@ export default function ClueDetail() {
               <Form.Item
                 name="handler"
                 label="责任人"
-                rules={[{ required: true, message: '请选择责任人' }]}
+                rules={[{ required: true, message: '请选择或输入责任人' }]}
               >
-                <Select
-                  placeholder="请选择责任人"
-                  showSearch
-                  optionFilterProp="label"
-                  options={[
-                    { label: '张三', value: '张三' },
-                    { label: '李四', value: '李四' },
-                    { label: '王五', value: '王五' },
-                    { label: '赵六', value: '赵六' },
-                  ]}
+                <AutoComplete
+                  placeholder="请选择或输入责任人"
+                  options={allPersons.map(p => ({
+                    label: `${p.name}${p.personType ? ` (${p.personType})` : ''}${p.idCard ? ` - ${p.idCard}` : ''}`,
+                    value: p.name,
+                  }))}
+                  filterOption={(input, option) =>
+                    (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                  }
                   allowClear
                 />
               </Form.Item>
