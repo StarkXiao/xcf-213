@@ -36,6 +36,10 @@ export const clueApi = {
   delete: (id: string) => api.delete(`/clues/${id}`),
   addPerson: (id: string, data: any) => api.post(`/clues/${id}/persons`, data),
   removePerson: (id: string, personId: string) => api.delete(`/clues/${id}/persons/${personId}`),
+  getVerifications: (id: string, params?: any) => api.get(`/clues/${id}/verifications`, { params }),
+  addVerification: (id: string, data: any) => api.post(`/clues/${id}/verifications`, data),
+  updateVerification: (id: string, verificationId: string, data: any) => api.put(`/clues/${id}/verifications/${verificationId}`, data),
+  deleteVerification: (id: string, verificationId: string) => api.delete(`/clues/${id}/verifications/${verificationId}`),
 };
 
 export const personApi = {

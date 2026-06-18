@@ -119,6 +119,7 @@ model Clue {
   cluePersons CluePerson[]
   evidenceBorrows EvidenceBorrow[]
   evidenceBatches EvidenceBatch[] @relation("BatchClue")
+  verifications ClueVerification[]
 }
 
 // 线索-人员关联表
@@ -163,35 +164,37 @@ model EvidenceBatch {
 
 // 证据附件表
 model Evidence {
-  id          String     @id @default(uuid())
-  batchId     String?
-  caseId      String?
-  clueId      String?
-  evidenceNumber String  @unique
-  name        String
-  description String?
-  type        String
-  filePath    String
-  fileName    String
-  fileSize    Int?
-  mimeType    String?
-  hash        String?
-  collectionMethod String?
-  collector   String?
-  collectTime DateTime?
-  location    String?
-  status      String
-  borrowStatus String?  @default("未借阅")
-  currentBorrower String?
-  borrowTime  DateTime?
-  note        String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                 String              @id @default(uuid())
+  batchId            String?
+  caseId             String?
+  clueId             String?
+  clueVerificationId String?
+  evidenceNumber     String              @unique
+  name               String
+  description        String?
+  type               String
+  filePath           String
+  fileName           String
+  fileSize           Int?
+  mimeType           String?
+  hash               String?
+  collectionMethod   String?
+  collector          String?
+  collectTime        DateTime?
+  location           String?
+  status             String
+  borrowStatus       String?             @default("未借阅")
+  currentBorrower    String?
+  borrowTime         DateTime?
+  note               String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  batch       EvidenceBatch? @relation(fields: [batchId], references: [id])
-  case        Case?      @relation(fields: [caseId], references: [id])
-  clue        Clue?      @relation(fields: [clueId], references: [id])
-  borrowRecords EvidenceBorrow[]
+  batch              EvidenceBatch?      @relation(fields: [batchId], references: [id])
+  case               Case?               @relation(fields: [caseId], references: [id])
+  clue               Clue?               @relation(fields: [clueId], references: [id])
+  clueVerification   ClueVerification?   @relation(fields: [clueVerificationId], references: [id])
+  borrowRecords      EvidenceBorrow[]
 }
 
 // 证据借阅记录表
@@ -216,6 +219,25 @@ model EvidenceBorrow {
   evidence    Evidence   @relation(fields: [evidenceId], references: [id])
   case        Case?      @relation(fields: [caseId], references: [id])
   clue        Clue?      @relation(fields: [clueId], references: [id])
+}
+
+// 线索核查记录表
+model ClueVerification {
+  id            String     @id @default(uuid())
+  clueId        String
+  result        String
+  attachmentIds String?
+  handler       String?
+  handleTime    DateTime?
+  note          String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  clue          Clue       @relation(fields: [clueId], references: [id])
+  evidences     Evidence[]
+
+  @@index([clueId])
+  @@index([createdAt])
 }
 
 // 操作日志表

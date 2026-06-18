@@ -30,6 +30,19 @@ interface ClueCreate {
 
 interface ClueUpdate extends Partial<ClueCreate> {}
 
+interface ClueVerificationCreate {
+  result: string;
+  attachmentIds?: string[];
+  handler?: string;
+  handleTime?: string;
+  note?: string;
+}
+
+interface ClueVerificationQuery {
+  page?: number;
+  pageSize?: number;
+}
+
 export default async function (fastify: FastifyInstance) {
   fastify.get('/', async (request: FastifyRequest<{ Querystring: ClueQuery }>, reply) => {
     const { page = 1, pageSize = 10, keyword, clueType, status, credibility, importance, caseId } = request.query;
@@ -509,6 +522,122 @@ export default async function (fastify: FastifyInstance) {
       return { success: true, createdCount: createdEvidences.length, evidences: createdEvidences };
     } catch (error) {
       reply.status(400).send({ error: '批量转证据失败' });
+    }
+  });
+
+  fastify.get('/:id/verifications', async (request: FastifyRequest<{ Params: { id: string }; Querystring: ClueVerificationQuery }>, reply) => {
+    const { page = 1, pageSize = 10 } = request.query;
+    const skip = (page - 1) * pageSize;
+
+    const where = { clueId: request.params.id };
+
+    const [items, total] = await Promise.all([
+      prisma.clueVerification.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          evidences: { select: { id: true, name: true, evidenceNumber: true, type: true } },
+        },
+      }),
+      prisma.clueVerification.count({ where }),
+    ]);
+
+    return { items, total, page, pageSize };
+  });
+
+  fastify.post('/:id/verifications', async (request: FastifyRequest<{ Params: { id: string }; Body: ClueVerificationCreate }>, reply) => {
+    const { result, attachmentIds, handler, handleTime, note } = request.body;
+
+    try {
+      const verification = await prisma.clueVerification.create({
+        data: {
+          clueId: request.params.id,
+          result,
+          attachmentIds: attachmentIds ? attachmentIds.join(',') : null,
+          handler,
+          handleTime: handleTime ? new Date(handleTime) : null,
+          note,
+        },
+      });
+
+      if (attachmentIds && attachmentIds.length > 0) {
+        await prisma.evidence.updateMany({
+          where: { id: { in: attachmentIds } },
+          data: { clueVerificationId: verification.id },
+        });
+      }
+
+      const resultWithEvidences = await prisma.clueVerification.findUnique({
+        where: { id: verification.id },
+        include: {
+          evidences: { select: { id: true, name: true, evidenceNumber: true, type: true } },
+        },
+      });
+
+      return resultWithEvidences;
+    } catch (error) {
+      reply.status(400).send({ error: '添加核查记录失败' });
+    }
+  });
+
+  fastify.put('/:id/verifications/:verificationId', async (request: FastifyRequest<{ Params: { id: string; verificationId: string }; Body: Partial<ClueVerificationCreate> }>, reply) => {
+    const { result, attachmentIds, handler, handleTime, note } = request.body;
+
+    try {
+      const verification = await prisma.clueVerification.update({
+        where: { id: request.params.verificationId },
+        data: {
+          result,
+          attachmentIds: attachmentIds ? attachmentIds.join(',') : undefined,
+          handler,
+          handleTime: handleTime ? new Date(handleTime) : undefined,
+          note,
+        },
+      });
+
+      if (attachmentIds) {
+        await prisma.evidence.updateMany({
+          where: { clueVerificationId: verification.id },
+          data: { clueVerificationId: null },
+        });
+
+        if (attachmentIds.length > 0) {
+          await prisma.evidence.updateMany({
+            where: { id: { in: attachmentIds } },
+            data: { clueVerificationId: verification.id },
+          });
+        }
+      }
+
+      const resultWithEvidences = await prisma.clueVerification.findUnique({
+        where: { id: verification.id },
+        include: {
+          evidences: { select: { id: true, name: true, evidenceNumber: true, type: true } },
+        },
+      });
+
+      return resultWithEvidences;
+    } catch (error) {
+      reply.status(400).send({ error: '更新核查记录失败' });
+    }
+  });
+
+  fastify.delete('/:id/verifications/:verificationId', async (request: FastifyRequest<{ Params: { id: string; verificationId: string } }>, reply) => {
+    try {
+      await prisma.evidence.updateMany({
+        where: { clueVerificationId: request.params.verificationId },
+        data: { clueVerificationId: null },
+      });
+
+      await prisma.clueVerification.delete({
+        where: { id: request.params.verificationId },
+      });
+
+      return { success: true };
+    } catch (error) {
+      reply.status(400).send({ error: '删除核查记录失败' });
     }
   });
 }

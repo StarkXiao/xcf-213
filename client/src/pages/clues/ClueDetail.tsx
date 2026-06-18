@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, Tabs, List, Modal, Form, Select, Input, message, Popconfirm, DatePicker, Timeline, Row, Col } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined, PaperClipOutlined, CheckCircleOutlined, UserOutlined, FileTextOutlined } from '@ant-design/icons';
 import moment from 'moment';
-import { clueApi, personApi, caseApi } from '../../services/api';
+import { clueApi, personApi, evidenceApi } from '../../services/api';
 
 const statusColors: Record<string, string> = {
   '待核实': 'default',
@@ -55,11 +55,22 @@ export default function ClueDetail() {
   const [personModal, setPersonModal] = useState(false);
   const [personForm] = Form.useForm();
   const [allPersons, setAllPersons] = useState<any[]>([]);
+  const [verificationModal, setVerificationModal] = useState(false);
+  const [verificationForm] = Form.useForm();
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationPage, setVerificationPage] = useState(1);
+  const [verificationPageSize, setVerificationPageSize] = useState(10);
+  const [verificationTotal, setVerificationTotal] = useState(0);
+  const [editingVerification, setEditingVerification] = useState<any>(null);
+  const [allEvidences, setAllEvidences] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
       loadClueData();
       loadAllPersons();
+      loadVerifications();
+      loadAllEvidences();
     }
   }, [id]);
 
@@ -81,6 +92,89 @@ export default function ClueDetail() {
       setAllPersons(res.data);
     } catch (error) {
       console.error('Failed to load persons:', error);
+    }
+  };
+
+  const loadAllEvidences = async () => {
+    try {
+      const res = await evidenceApi.list({ pageSize: 1000 });
+      setAllEvidences(res.data.items || []);
+    } catch (error) {
+      console.error('Failed to load evidences:', error);
+    }
+  };
+
+  const loadVerifications = async (page = 1, pageSize = 10) => {
+    setVerificationLoading(true);
+    try {
+      const res = await clueApi.getVerifications(id!, { page, pageSize });
+      setVerifications(res.data.items);
+      setVerificationTotal(res.data.total);
+      setVerificationPage(page);
+      setVerificationPageSize(pageSize);
+    } catch (error) {
+      console.error('Failed to load verifications:', error);
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handleAddVerification = () => {
+    setEditingVerification(null);
+    verificationForm.resetFields();
+    verificationForm.setFieldsValue({
+      handleTime: moment(),
+    });
+    setVerificationModal(true);
+  };
+
+  const handleEditVerification = (record: any) => {
+    setEditingVerification(record);
+    verificationForm.setFieldsValue({
+      result: record.result,
+      handler: record.handler,
+      handleTime: record.handleTime ? moment(record.handleTime) : moment(),
+      note: record.note,
+      attachmentIds: record.evidences?.map((e: any) => e.id) || [],
+    });
+    setVerificationModal(true);
+  };
+
+  const handleSubmitVerification = async (values: any) => {
+    try {
+      const data = {
+        result: values.result,
+        handler: values.handler,
+        handleTime: values.handleTime?.format('YYYY-MM-DD HH:mm:ss'),
+        note: values.note,
+        attachmentIds: values.attachmentIds || [],
+      };
+
+      if (editingVerification) {
+        await clueApi.updateVerification(id!, editingVerification.id, data);
+        message.success('更新成功');
+      } else {
+        await clueApi.addVerification(id!, data);
+        message.success('添加成功');
+      }
+
+      setVerificationModal(false);
+      verificationForm.resetFields();
+      loadVerifications(verificationPage, verificationPageSize);
+      loadClueData();
+    } catch (error) {
+      message.error(editingVerification ? '更新失败' : '添加失败');
+    }
+  };
+
+  const handleDeleteVerification = async (verificationId: string) => {
+    try {
+      await clueApi.deleteVerification(id!, verificationId);
+      message.success('删除成功');
+      loadVerifications(verificationPage, verificationPageSize);
+      loadClueData();
+    } catch (error) {
+      message.error('删除失败');
     }
   };
 
@@ -253,6 +347,161 @@ export default function ClueDetail() {
         </div>
       ),
     },
+    {
+      key: 'verifications',
+      label: (
+        <Space>
+          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+          核查记录 ({verificationTotal})
+        </Space>
+      ),
+      children: (
+        <div>
+          <div style={{ marginBottom: 16, textAlign: 'right' }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddVerification}>
+              新增核查记录
+            </Button>
+          </div>
+          <Card loading={verificationLoading} size="small">
+            {verifications.length > 0 ? (
+              <Timeline
+                mode="left"
+                items={verifications.map((item: any) => ({
+                  color: 'green',
+                  label: (
+                    <div style={{ minWidth: 160 }}>
+                      <div style={{ fontWeight: 'bold', color: '#333' }}>
+                        {item.handleTime ? moment(item.handleTime).format('YYYY-MM-DD HH:mm') : moment(item.createdAt).format('YYYY-MM-DD HH:mm')}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                        <Space size={4}>
+                          <UserOutlined />
+                          {item.handler || '未指定'}
+                        </Space>
+                      </div>
+                    </div>
+                  ),
+                  children: (
+                    <Card size="small" style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 'bold', marginBottom: 8, color: '#333' }}>
+                            <Space>
+                              <FileTextOutlined style={{ color: '#52c41a' }} />
+                              处置结果
+                            </Space>
+                          </div>
+                          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#555' }}>
+                            {item.result}
+                          </div>
+                          {item.note && (
+                            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #e8e8e8' }}>
+                              <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>备注：</div>
+                              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#666', fontSize: 13 }}>
+                                {item.note}
+                              </div>
+                            </div>
+                          )}
+                          {item.evidences && item.evidences.length > 0 && (
+                            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #e8e8e8' }}>
+                              <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
+                                <Space>
+                                  <PaperClipOutlined />
+                                  关联附件 ({item.evidences.length})
+                                </Space>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {item.evidences.map((ev: any) => (
+                                  <Tag
+                                    key={ev.id}
+                                    color={evidenceTypeColors[ev.type]}
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => navigate(`/evidences/${ev.id}`)}
+                                  >
+                                    {ev.evidenceNumber} - {ev.name}
+                                  </Tag>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ marginLeft: 16 }}>
+                          <Space>
+                            <Button
+                              type="link"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() => handleEditVerification(item)}
+                            >
+                              编辑
+                            </Button>
+                            <Popconfirm
+                              title="确定删除该核查记录？"
+                              onConfirm={() => handleDeleteVerification(item.id)}
+                            >
+                              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                                删除
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        </div>
+                      </div>
+                    </Card>
+                  ),
+                }))}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
+                <FileTextOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }} />
+                <div style={{ marginBottom: 8 }}>暂无核查记录</div>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddVerification}>
+                  新增第一条核查记录
+                </Button>
+              </div>
+            )}
+            {verificationTotal > 0 && (
+              <div style={{ marginTop: 16, textAlign: 'right' }}>
+                <div style={{ display: 'inline-block' }}>
+                  <span style={{ marginRight: 16, color: '#666', fontSize: 13 }}>
+                    共 {verificationTotal} 条记录
+                  </span>
+                  <Space size={0} wrap={false}>
+                    <Button
+                      size="small"
+                      disabled={verificationPage <= 1}
+                      onClick={() => loadVerifications(verificationPage - 1, verificationPageSize)}
+                    >
+                      上一页
+                    </Button>
+                    <Button size="small" disabled>
+                      {verificationPage} / {Math.ceil(verificationTotal / verificationPageSize)}
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={verificationPage >= Math.ceil(verificationTotal / verificationPageSize)}
+                      onClick={() => loadVerifications(verificationPage + 1, verificationPageSize)}
+                    >
+                      下一页
+                    </Button>
+                  </Space>
+                  <Select
+                    size="small"
+                    value={verificationPageSize}
+                    style={{ width: 100, marginLeft: 8 }}
+                    onChange={(value) => loadVerifications(1, value)}
+                    options={[
+                      { label: '10条/页', value: 10 },
+                      { label: '20条/页', value: 20 },
+                      { label: '50条/页', value: 50 },
+                    ]}
+                  />
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -306,6 +555,104 @@ export default function ClueDetail() {
             <Space>
               <Button type="primary" htmlType="submit">确认添加</Button>
               <Button onClick={() => setPersonModal(false)}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingVerification ? '编辑核查记录' : '新增核查记录'}
+        open={verificationModal}
+        onCancel={() => setVerificationModal(false)}
+        footer={null}
+        width={600}
+      >
+        <Form form={verificationForm} layout="vertical" onFinish={handleSubmitVerification}>
+          <Form.Item
+            name="result"
+            label="处置结果"
+            rules={[{ required: true, message: '请输入处置结果' }]}
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="请详细描述本次核查的处置结果..."
+              showCount
+              maxLength={2000}
+            />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="handler"
+                label="责任人"
+                rules={[{ required: true, message: '请选择责任人' }]}
+              >
+                <Select
+                  placeholder="请选择责任人"
+                  showSearch
+                  optionFilterProp="label"
+                  options={[
+                    { label: '张三', value: '张三' },
+                    { label: '李四', value: '李四' },
+                    { label: '王五', value: '王五' },
+                    { label: '赵六', value: '赵六' },
+                  ]}
+                  allowClear
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="handleTime"
+                label="处置时间"
+                rules={[{ required: true, message: '请选择处置时间' }]}
+              >
+                <DatePicker
+                  showTime
+                  style={{ width: '100%' }}
+                  format="YYYY-MM-DD HH:mm:ss"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="attachmentIds"
+            label="附件补充"
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择关联的证据附件（可多选）"
+              showSearch
+              optionFilterProp="label"
+              maxTagCount="responsive"
+              options={allEvidences.map(ev => ({
+                label: `${ev.evidenceNumber} - ${ev.name} (${ev.type})`,
+                value: ev.id,
+              }))}
+              allowClear
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="note"
+            label="备注说明"
+          >
+            <Input.TextArea
+              rows={3}
+              placeholder="其他需要说明的内容..."
+              showCount
+              maxLength={500}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                {editingVerification ? '确认更新' : '确认提交'}
+              </Button>
+              <Button onClick={() => setVerificationModal(false)}>取消</Button>
             </Space>
           </Form.Item>
         </Form>
