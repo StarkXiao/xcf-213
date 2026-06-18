@@ -68,10 +68,10 @@ const investigationStages = [
 
 const stageStatusMap: Record<string, number> = {
   '待立案': 1,
-  '侦查中': 3,
+  '侦查中': 2,
   '已移送起诉': 4,
-  '已判决': 6,
-  '已结案': 7,
+  '已判决': 5,
+  '已结案': 6,
   '已撤销': 0,
 };
 
@@ -450,25 +450,27 @@ export default function CaseDetail() {
             <Steps
               direction="vertical"
               current={currentStageIndex}
-              status={caseData.status === '已撤销' ? 'error' : 'process'}
-              items={investigationStages.map((stage, index) => ({
-                title: stage.title,
-                description: (
-                  <div>
-                    <p style={{ color: '#666', marginBottom: 8 }}>{stage.description}</p>
-                    {index < currentStageIndex && (
-                      <Tag color="success">已完成</Tag>
-                    )}
-                    {index === currentStageIndex && (
-                      <Tag color="processing">进行中</Tag>
-                    )}
-                    {index > currentStageIndex && (
-                      <Tag>待开始</Tag>
-                    )}
-                  </div>
-                ),
-                icon: React.createElement(stage.icon),
-              }))}
+              status={
+                caseData.status === '已撤销' ? 'error' :
+                caseData.status === '已结案' ? 'finish' :
+                'process'
+              }
+              items={investigationStages.map((stage, index) => {
+                const isFinished = caseData.status === '已结案' || index < currentStageIndex;
+                const isCurrent = index === currentStageIndex && caseData.status !== '已结案' && caseData.status !== '已撤销';
+                return {
+                  title: stage.title,
+                  description: (
+                    <div>
+                      <p style={{ color: '#666', marginBottom: 8 }}>{stage.description}</p>
+                      {isFinished && <Tag color="success">已完成</Tag>}
+                      {isCurrent && <Tag color="processing">进行中</Tag>}
+                      {index > currentStageIndex && caseData.status !== '已结案' && <Tag>待开始</Tag>}
+                    </div>
+                  ),
+                  icon: React.createElement(stage.icon),
+                };
+              })}
             />
           </Card>
 
@@ -579,7 +581,7 @@ export default function CaseDetail() {
               mode="left"
               items={[
                 {
-                  color: 'green',
+                  color: (caseData.status === '已结案' || currentStageIndex > 0) ? 'green' : currentStageIndex === 0 ? 'blue' : 'gray',
                   label: caseData.reportTime ? moment(caseData.reportTime).format('YYYY-MM-DD HH:mm') : '-',
                   children: (
                     <div>
@@ -587,14 +589,18 @@ export default function CaseDetail() {
                       <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
                         接到报案，案件进入侦查流程
                       </p>
-                      {caseData.reportTime && (
+                      {(caseData.status === '已结案' || currentStageIndex > 0) ? (
                         <Tag color="success">已完成</Tag>
+                      ) : currentStageIndex === 0 ? (
+                        <Tag color="processing">进行中</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
                       )}
                     </div>
                   ),
                 },
                 {
-                  color: currentStageIndex >= 1 ? 'green' : 'gray',
+                  color: (caseData.status === '已结案' || currentStageIndex > 1) ? 'green' : currentStageIndex === 1 ? 'blue' : 'gray',
                   label: caseData.createdAt ? moment(caseData.createdAt).format('YYYY-MM-DD HH:mm') : '-',
                   children: (
                     <div>
@@ -602,38 +608,48 @@ export default function CaseDetail() {
                       <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
                         案件信息录入系统，分配主办民警
                       </p>
-                      <Tag color="success">已完成</Tag>
+                      {(caseData.status === '已结案' || currentStageIndex > 1) ? (
+                        <Tag color="success">已完成</Tag>
+                      ) : currentStageIndex === 1 ? (
+                        <Tag color="processing">进行中</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
+                      )}
                     </div>
                   ),
                 },
                 {
-                  color: currentStageIndex >= 3 ? 'green' : 'blue',
-                  label: currentStageIndex >= 3 ? moment(caseData.updatedAt).format('YYYY-MM-DD HH:mm') : '进行中',
+                  color: (caseData.status === '已结案' || currentStageIndex > 2) ? 'green' : currentStageIndex === 2 ? 'blue' : 'gray',
+                  label: (caseData.status === '已结案' || currentStageIndex > 2) ? moment(caseData.updatedAt).format('YYYY-MM-DD HH:mm') : currentStageIndex === 2 ? '进行中' : '待开始',
                   children: (
                     <div>
                       <p style={{ fontWeight: 'bold', marginBottom: 4 }}>侦查取证</p>
                       <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
                         收集线索 {clueStats.total} 条，固定证据 {evidenceStats.total} 份，核查人员 {personStats.total} 人
                       </p>
-                      {currentStageIndex >= 3 ? (
+                      {(caseData.status === '已结案' || currentStageIndex > 2) ? (
                         <Tag color="success">已完成</Tag>
-                      ) : (
+                      ) : currentStageIndex === 2 ? (
                         <Tag color="processing">进行中</Tag>
+                      ) : (
+                        <Tag>待开始</Tag>
                       )}
                     </div>
                   ),
                 },
                 {
-                  color: currentStageIndex >= 4 ? 'green' : 'gray',
-                  label: currentStageIndex >= 4 ? '-' : '待开始',
+                  color: (caseData.status === '已结案' || currentStageIndex > 3) ? 'green' : currentStageIndex === 3 ? 'blue' : 'gray',
+                  label: (caseData.status === '已结案' || currentStageIndex > 3) ? '-' : currentStageIndex === 3 ? '进行中' : '待开始',
                   children: (
                     <div>
                       <p style={{ fontWeight: 'bold', marginBottom: 4 }}>破案攻坚</p>
                       <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
                         锁定主要嫌疑人，完善证据链
                       </p>
-                      {currentStageIndex >= 4 ? (
+                      {(caseData.status === '已结案' || currentStageIndex > 3) ? (
                         <Tag color="success">已完成</Tag>
+                      ) : currentStageIndex === 3 ? (
+                        <Tag color="processing">进行中</Tag>
                       ) : (
                         <Tag>待开始</Tag>
                       )}
@@ -641,16 +657,18 @@ export default function CaseDetail() {
                   ),
                 },
                 {
-                  color: currentStageIndex >= 5 ? 'green' : 'gray',
-                  label: currentStageIndex >= 5 ? '-' : '待开始',
+                  color: (caseData.status === '已结案' || currentStageIndex > 4) ? 'green' : currentStageIndex === 4 ? 'blue' : 'gray',
+                  label: (caseData.status === '已结案' || currentStageIndex > 4) ? '-' : currentStageIndex === 4 ? '进行中' : '待开始',
                   children: (
                     <div>
                       <p style={{ fontWeight: 'bold', marginBottom: 4 }}>移送起诉</p>
                       <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
                         移交检察机关审查起诉
                       </p>
-                      {currentStageIndex >= 5 ? (
+                      {(caseData.status === '已结案' || currentStageIndex > 4) ? (
                         <Tag color="success">已完成</Tag>
+                      ) : currentStageIndex === 4 ? (
+                        <Tag color="processing">进行中</Tag>
                       ) : (
                         <Tag>待开始</Tag>
                       )}
@@ -658,16 +676,18 @@ export default function CaseDetail() {
                   ),
                 },
                 {
-                  color: currentStageIndex >= 7 ? 'green' : 'gray',
-                  label: currentStageIndex >= 7 ? '-' : '待开始',
+                  color: (caseData.status === '已结案' || currentStageIndex > 5) ? 'green' : currentStageIndex === 5 ? 'blue' : 'gray',
+                  label: (caseData.status === '已结案' || currentStageIndex > 5) ? '-' : currentStageIndex === 5 ? '进行中' : '待开始',
                   children: (
                     <div>
                       <p style={{ fontWeight: 'bold', marginBottom: 4 }}>审理判决</p>
                       <p style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
                         法院审理并作出判决
                       </p>
-                      {currentStageIndex >= 7 ? (
+                      {(caseData.status === '已结案' || currentStageIndex > 5) ? (
                         <Tag color="success">已完成</Tag>
+                      ) : currentStageIndex === 5 ? (
+                        <Tag color="processing">进行中</Tag>
                       ) : (
                         <Tag>待开始</Tag>
                       )}
@@ -675,7 +695,7 @@ export default function CaseDetail() {
                   ),
                 },
                 {
-                  color: currentStageIndex >= 8 ? 'green' : 'gray',
+                  color: caseData.status === '已结案' ? 'green' : 'gray',
                   label: caseData.status === '已结案' ? moment(caseData.updatedAt).format('YYYY-MM-DD HH:mm') : '待开始',
                   children: (
                     <div>
