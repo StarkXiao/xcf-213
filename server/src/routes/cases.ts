@@ -1,5 +1,17 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma';
+import {
+  TargetType,
+  logCreate,
+  logUpdate,
+  logDelete,
+  logAssociate,
+  logDisassociate,
+  createOperationLog,
+  ActionType,
+  getRequestMeta,
+  extractOperator,
+} from '../lib/operationLog';
 
 interface CaseQuery {
   page?: number;
@@ -248,12 +260,34 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
+    await logCreate(
+      TargetType.CASE,
+      caseItem.id,
+      `创建案件：${caseNumber} - ${caseItem.title}`,
+      request,
+      caseItem.caseManager,
+      {
+        id: caseItem.id,
+        caseNumber: caseItem.caseNumber,
+        title: caseItem.title,
+        caseType: caseItem.caseType,
+        status: caseItem.status,
+        priority: caseItem.priority,
+        caseManager: caseItem.caseManager,
+        department: caseItem.department,
+      }
+    );
+
     return caseItem;
   });
 
   fastify.put('/:id', async (request: FastifyRequest<{ Params: { id: string }; Body: CaseUpdate }>, reply) => {
     const data = request.body;
     try {
+      const beforeCase = await prisma.case.findUnique({
+        where: { id: request.params.id },
+      });
+
       const caseItem = await prisma.case.update({
         where: { id: request.params.id },
         data: {
@@ -262,6 +296,33 @@ export default async function (fastify: FastifyInstance) {
           reportTime: data.reportTime ? new Date(data.reportTime) : undefined,
         },
       });
+
+      await logUpdate(
+        TargetType.CASE,
+        caseItem.id,
+        `更新案件：${caseItem.caseNumber} - ${caseItem.title}`,
+        request,
+        {
+          title: beforeCase?.title,
+          caseType: beforeCase?.caseType,
+          status: beforeCase?.status,
+          priority: beforeCase?.priority,
+          caseManager: beforeCase?.caseManager,
+          department: beforeCase?.department,
+          location: beforeCase?.location,
+        },
+        {
+          title: caseItem.title,
+          caseType: caseItem.caseType,
+          status: caseItem.status,
+          priority: caseItem.priority,
+          caseManager: caseItem.caseManager,
+          department: caseItem.department,
+          location: caseItem.location,
+        },
+        caseItem.caseManager
+      );
+
       return caseItem;
     } catch (error) {
       reply.status(404).send({ error: '案件不存在' });
@@ -270,6 +331,10 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     try {
+      const beforeCase = await prisma.case.findUnique({
+        where: { id: request.params.id },
+      });
+
       await prisma.$transaction([
         prisma.caseRelation.deleteMany({ where: { sourceCaseId: request.params.id } }),
         prisma.caseRelation.deleteMany({ where: { targetCaseId: request.params.id } }),
@@ -279,6 +344,21 @@ export default async function (fastify: FastifyInstance) {
         prisma.personRelation.deleteMany({ where: { caseId: request.params.id } }),
         prisma.case.delete({ where: { id: request.params.id } }),
       ]);
+
+      await logDelete(
+        TargetType.CASE,
+        request.params.id,
+        `删除案件：${beforeCase?.caseNumber || ''} - ${beforeCase?.title || ''}`,
+        request,
+        beforeCase ? {
+          id: beforeCase.id,
+          caseNumber: beforeCase.caseNumber,
+          title: beforeCase.title,
+          caseType: beforeCase.caseType,
+          status: beforeCase.status,
+        } : undefined
+      );
+
       return { success: true };
     } catch (error) {
       reply.status(404).send({ error: '案件不存在' });
@@ -296,6 +376,37 @@ export default async function (fastify: FastifyInstance) {
         },
         include: { person: true },
       });
+
+      const caseInfo = await prisma.case.findUnique({
+        where: { id: request.params.id },
+        select: { caseNumber: true, title: true },
+      });
+
+      await logAssociate(
+        TargetType.CASE,
+        request.params.id,
+        `案件关联人员：${casePerson.person.name}（${request.body.role}）`,
+        request,
+        {
+          personId: request.body.personId,
+          personName: casePerson.person.name,
+          role: request.body.role,
+        }
+      );
+
+      await logAssociate(
+        TargetType.PERSON,
+        request.body.personId,
+        `关联案件：${caseInfo?.caseNumber || ''} - ${caseInfo?.title || ''}`,
+        request,
+        {
+          caseId: request.params.id,
+          caseNumber: caseInfo?.caseNumber,
+          caseTitle: caseInfo?.title,
+          role: request.body.role,
+        }
+      );
+
       return casePerson;
     } catch (error) {
       reply.status(400).send({ error: '关联失败' });
@@ -304,9 +415,43 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.delete('/:id/persons/:personId', async (request: FastifyRequest<{ Params: { id: string; personId: string } }>, reply) => {
     try {
+      const person = await prisma.person.findUnique({
+        where: { id: request.params.personId },
+        select: { name: true },
+      });
+
+      const caseInfo = await prisma.case.findUnique({
+        where: { id: request.params.id },
+        select: { caseNumber: true, title: true },
+      });
+
       await prisma.casePerson.deleteMany({
         where: { caseId: request.params.id, personId: request.params.personId },
       });
+
+      await logDisassociate(
+        TargetType.CASE,
+        request.params.id,
+        `解除人员关联：${person?.name || '未知人员'}`,
+        request,
+        {
+          personId: request.params.personId,
+          personName: person?.name,
+        }
+      );
+
+      await logDisassociate(
+        TargetType.PERSON,
+        request.params.personId,
+        `解除案件关联：${caseInfo?.caseNumber || ''} - ${caseInfo?.title || ''}`,
+        request,
+        {
+          caseId: request.params.id,
+          caseNumber: caseInfo?.caseNumber,
+          caseTitle: caseInfo?.title,
+        }
+      );
+
       return { success: true };
     } catch (error) {
       reply.status(400).send({ error: '取消关联失败' });
@@ -587,6 +732,23 @@ export default async function (fastify: FastifyInstance) {
 
     const exportData = JSON.stringify(archive, null, 2);
     const fileName = `${caseItem.caseNumber}_${caseItem.title}_归档_${new Date().toISOString().slice(0, 10)}.json`;
+
+    const meta = getRequestMeta(request);
+    await createOperationLog({
+      targetType: TargetType.CASE,
+      targetId: request.params.id,
+      action: ActionType.EXPORT,
+      description: `导出案件归档：${caseItem.caseNumber} - ${caseItem.title}`,
+      operator: undefined,
+      afterData: {
+        includeClues: includeClues === 'true',
+        includeEvidences: includeEvidences === 'true',
+        includePersons: includePersons === 'true',
+        includeRelations: includeRelations === 'true',
+        fileName,
+      },
+      ...meta,
+    });
 
     reply.header('Content-Type', 'application/json; charset=utf-8');
     reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);

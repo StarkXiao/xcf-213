@@ -1,5 +1,17 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import prisma from '../lib/prisma';
+import {
+  TargetType,
+  ActionType,
+  logCreate,
+  logUpdate,
+  logDelete,
+  logAssociate,
+  logDisassociate,
+  createOperationLog,
+  getRequestMeta,
+  extractOperator,
+} from '../lib/operationLog';
 
 interface ClueQuery {
   page?: number;
@@ -112,12 +124,54 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
+    await logCreate(
+      TargetType.CLUE,
+      clue.id,
+      `创建线索：${clueNumber} - ${clue.title}`,
+      request,
+      clue.handler,
+      {
+        id: clue.id,
+        clueNumber: clue.clueNumber,
+        title: clue.title,
+        clueType: clue.clueType,
+        source: clue.source,
+        credibility: clue.credibility,
+        importance: clue.importance,
+        status: clue.status,
+        handler: clue.handler,
+        caseId: clue.caseId,
+      }
+    );
+
+    if (clue.caseId) {
+      const caseInfo = await prisma.case.findUnique({
+        where: { id: clue.caseId },
+        select: { caseNumber: true, title: true },
+      });
+      await logAssociate(
+        TargetType.CASE,
+        clue.caseId,
+        `新增关联线索：${clueNumber} - ${clue.title}`,
+        request,
+        {
+          clueId: clue.id,
+          clueNumber: clue.clueNumber,
+          clueTitle: clue.title,
+        }
+      );
+    }
+
     return clue;
   });
 
   fastify.put('/:id', async (request: FastifyRequest<{ Params: { id: string }; Body: ClueUpdate }>, reply) => {
     const data = request.body;
     try {
+      const beforeClue = await prisma.clue.findUnique({
+        where: { id: request.params.id },
+      });
+
       const clue = await prisma.clue.update({
         where: { id: request.params.id },
         data: {
@@ -125,6 +179,74 @@ export default async function (fastify: FastifyInstance) {
           findTime: data.findTime ? new Date(data.findTime) : undefined,
         },
       });
+
+      await logUpdate(
+        TargetType.CLUE,
+        clue.id,
+        `更新线索：${clue.clueNumber} - ${clue.title}`,
+        request,
+        {
+          title: beforeClue?.title,
+          clueType: beforeClue?.clueType,
+          source: beforeClue?.source,
+          credibility: beforeClue?.credibility,
+          importance: beforeClue?.importance,
+          status: beforeClue?.status,
+          handler: beforeClue?.handler,
+          caseId: beforeClue?.caseId,
+          location: beforeClue?.location,
+        },
+        {
+          title: clue.title,
+          clueType: clue.clueType,
+          source: clue.source,
+          credibility: clue.credibility,
+          importance: clue.importance,
+          status: clue.status,
+          handler: clue.handler,
+          caseId: clue.caseId,
+          location: clue.location,
+        },
+        clue.handler
+      );
+
+      if (beforeClue?.caseId !== clue.caseId) {
+        if (beforeClue?.caseId) {
+          const beforeCase = await prisma.case.findUnique({
+            where: { id: beforeClue.caseId },
+            select: { caseNumber: true, title: true },
+          });
+          await logDisassociate(
+            TargetType.CASE,
+            beforeClue.caseId,
+            `移除关联线索：${beforeClue.clueNumber} - ${beforeClue.title}`,
+            request,
+            {
+              clueId: clue.id,
+              clueNumber: clue.clueNumber,
+              clueTitle: clue.title,
+            }
+          );
+        }
+        if (clue.caseId) {
+          const afterCase = await prisma.case.findUnique({
+            where: { id: clue.caseId },
+            select: { caseNumber: true, title: true },
+          });
+          await logAssociate(
+            TargetType.CASE,
+            clue.caseId,
+            `新增关联线索：${clue.clueNumber} - ${clue.title}`,
+            request,
+            {
+              clueId: clue.id,
+              clueNumber: clue.clueNumber,
+              clueTitle: clue.title,
+            }
+          );
+        }
+      }
+
       return clue;
     } catch (error) {
       reply.status(404).send({ error: '线索不存在' });
@@ -133,11 +255,52 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     try {
+      const beforeClue = await prisma.clue.findUnique({
+        where: { id: request.params.id },
+      });
+
+      const caseId = beforeClue?.caseId;
+
       await prisma.$transaction([
         prisma.evidence.updateMany({ where: { clueId: request.params.id }, data: { clueId: null } }),
         prisma.cluePerson.deleteMany({ where: { clueId: request.params.id } }),
+        prisma.clueVerification.deleteMany({ where: { clueId: request.params.id } }),
         prisma.clue.delete({ where: { id: request.params.id } }),
       ]);
+
+      await logDelete(
+        TargetType.CLUE,
+        request.params.id,
+        `删除线索：${beforeClue?.clueNumber || ''} - ${beforeClue?.title || ''}`,
+        request,
+        beforeClue ? {
+          id: beforeClue.id,
+          clueNumber: beforeClue.clueNumber,
+          title: beforeClue.title,
+          clueType: beforeClue.clueType,
+          status: beforeClue.status,
+          caseId: beforeClue.caseId,
+        } : undefined
+      );
+
+      if (caseId) {
+        const caseInfo = await prisma.case.findUnique({
+          where: { id: caseId },
+          select: { caseNumber: true, title: true },
+        });
+        await logDisassociate(
+          TargetType.CASE,
+          caseId,
+          `移除关联线索：${beforeClue?.clueNumber || ''} - ${beforeClue?.title || ''}`,
+          request,
+          {
+            clueId: request.params.id,
+            clueNumber: beforeClue?.clueNumber,
+            clueTitle: beforeClue?.title,
+          }
+        );
+      }
+
       return { success: true };
     } catch (error) {
       reply.status(404).send({ error: '线索不存在' });
@@ -155,6 +318,37 @@ export default async function (fastify: FastifyInstance) {
         },
         include: { person: true },
       });
+
+      const clueInfo = await prisma.clue.findUnique({
+        where: { id: request.params.id },
+        select: { clueNumber: true, title: true },
+      });
+
+      await logAssociate(
+        TargetType.CLUE,
+        request.params.id,
+        `线索关联人员：${cluePerson.person.name}（${request.body.relation}）`,
+        request,
+        {
+          personId: request.body.personId,
+          personName: cluePerson.person.name,
+          relation: request.body.relation,
+        }
+      );
+
+      await logAssociate(
+        TargetType.PERSON,
+        request.body.personId,
+        `关联线索：${clueInfo?.clueNumber || ''} - ${clueInfo?.title || ''}`,
+        request,
+        {
+          clueId: request.params.id,
+          clueNumber: clueInfo?.clueNumber,
+          clueTitle: clueInfo?.title,
+          relation: request.body.relation,
+        }
+      );
+
       return cluePerson;
     } catch (error) {
       reply.status(400).send({ error: '关联失败' });
@@ -163,9 +357,43 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.delete('/:id/persons/:personId', async (request: FastifyRequest<{ Params: { id: string; personId: string } }>, reply) => {
     try {
+      const person = await prisma.person.findUnique({
+        where: { id: request.params.personId },
+        select: { name: true },
+      });
+
+      const clueInfo = await prisma.clue.findUnique({
+        where: { id: request.params.id },
+        select: { clueNumber: true, title: true },
+      });
+
       await prisma.cluePerson.deleteMany({
         where: { clueId: request.params.id, personId: request.params.personId },
       });
+
+      await logDisassociate(
+        TargetType.CLUE,
+        request.params.id,
+        `解除人员关联：${person?.name || '未知人员'}`,
+        request,
+        {
+          personId: request.params.personId,
+          personName: person?.name,
+        }
+      );
+
+      await logDisassociate(
+        TargetType.PERSON,
+        request.params.personId,
+        `解除线索关联：${clueInfo?.clueNumber || ''} - ${clueInfo?.title || ''}`,
+        request,
+        {
+          clueId: request.params.id,
+          clueNumber: clueInfo?.clueNumber,
+          clueTitle: clueInfo?.title,
+        }
+      );
+
       return { success: true };
     } catch (error) {
       reply.status(400).send({ error: '取消关联失败' });
@@ -576,6 +804,27 @@ export default async function (fastify: FastifyInstance) {
         },
       });
 
+      const clueInfo = await prisma.clue.findUnique({
+        where: { id: request.params.id },
+        select: { clueNumber: true, title: true },
+      });
+
+      await createOperationLog({
+        targetType: TargetType.CLUE,
+        targetId: request.params.id,
+        action: ActionType.VERIFY,
+        description: `添加线索核查记录：核查结果-${result}${handler ? '，处理人-' + handler : ''}`,
+        operator: handler,
+        afterData: {
+          verificationId: verification.id,
+          result,
+          handler,
+          note,
+          evidenceCount: attachmentIds?.length || 0,
+        },
+        ...getRequestMeta(request),
+      });
+
       return resultWithEvidences;
     } catch (error) {
       reply.status(400).send({ error: '添加核查记录失败' });
@@ -586,6 +835,10 @@ export default async function (fastify: FastifyInstance) {
     const { result, attachmentIds, handler, handleTime, note } = request.body;
 
     try {
+      const beforeVerification = await prisma.clueVerification.findUnique({
+        where: { id: request.params.verificationId },
+      });
+
       const verification = await prisma.clueVerification.update({
         where: { id: request.params.verificationId },
         data: {
@@ -597,7 +850,7 @@ export default async function (fastify: FastifyInstance) {
         },
       });
 
-      if (attachmentIds) {
+      if (attachmentIds !== undefined) {
         await prisma.evidence.updateMany({
           where: { clueVerificationId: verification.id },
           data: { clueVerificationId: null },
@@ -618,6 +871,28 @@ export default async function (fastify: FastifyInstance) {
         },
       });
 
+      await createOperationLog({
+        targetType: TargetType.CLUE,
+        targetId: request.params.id,
+        action: ActionType.VERIFY,
+        description: `更新线索核查记录：核查结果-${result || beforeVerification?.result}`,
+        operator: handler || beforeVerification?.handler || undefined,
+        beforeData: {
+          verificationId: request.params.verificationId,
+          result: beforeVerification?.result,
+          handler: beforeVerification?.handler,
+          note: beforeVerification?.note,
+        },
+        afterData: {
+          verificationId: verification.id,
+          result: verification.result,
+          handler: verification.handler,
+          note: verification.note,
+          evidenceCount: attachmentIds?.length,
+        },
+        ...getRequestMeta(request),
+      });
+
       return resultWithEvidences;
     } catch (error) {
       reply.status(400).send({ error: '更新核查记录失败' });
@@ -626,6 +901,10 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.delete('/:id/verifications/:verificationId', async (request: FastifyRequest<{ Params: { id: string; verificationId: string } }>, reply) => {
     try {
+      const beforeVerification = await prisma.clueVerification.findUnique({
+        where: { id: request.params.verificationId },
+      });
+
       await prisma.evidence.updateMany({
         where: { clueVerificationId: request.params.verificationId },
         data: { clueVerificationId: null },
@@ -633,6 +912,21 @@ export default async function (fastify: FastifyInstance) {
 
       await prisma.clueVerification.delete({
         where: { id: request.params.verificationId },
+      });
+
+      await createOperationLog({
+        targetType: TargetType.CLUE,
+        targetId: request.params.id,
+        action: ActionType.VERIFY,
+        description: `删除线索核查记录：核查结果-${beforeVerification?.result || ''}`,
+        operator: beforeVerification?.handler || undefined,
+        beforeData: beforeVerification ? {
+          verificationId: beforeVerification.id,
+          result: beforeVerification.result,
+          handler: beforeVerification.handler,
+          note: beforeVerification.note,
+        } : undefined,
+        ...getRequestMeta(request),
       });
 
       return { success: true };

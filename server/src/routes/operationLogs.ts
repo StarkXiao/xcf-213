@@ -251,8 +251,8 @@ export default async function (fastify: FastifyInstance) {
   });
 
   fastify.get('/options', async (request, reply) => {
-    const targetTypes = ['CASE', 'CLUE', 'EVIDENCE', 'PERSON'];
-    const actions = ['CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'BORROW', 'RETURN', 'VERIFY', 'ASSOCIATE', 'DISASSOCIATE'];
+    const targetTypes = ['CASE', 'CLUE', 'EVIDENCE', 'PERSON', 'EVIDENCE_BATCH', 'EVIDENCE_BORROW', 'CLUE_VERIFICATION'];
+    const actions = ['CREATE', 'UPDATE', 'DELETE', 'VIEW', 'EXPORT', 'BORROW', 'RETURN', 'VERIFY', 'ASSOCIATE', 'DISASSOCIATE', 'BATCH_ASSIGN', 'BATCH_RETURN', 'BATCH_MERGE', 'BATCH_UPLOAD', 'TO_EVIDENCE'];
 
     const [distinctOperators, distinctActions] = await Promise.all([
       prisma.operationLog.findMany({

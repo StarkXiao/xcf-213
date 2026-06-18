@@ -4,6 +4,18 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
+import {
+  TargetType,
+  ActionType,
+  logCreate,
+  logUpdate,
+  logDelete,
+  logAssociate,
+  logDisassociate,
+  createOperationLog,
+  getRequestMeta,
+  extractOperator,
+} from '../lib/operationLog';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
@@ -80,46 +92,6 @@ interface ReturnConfirm {
   returnNote?: string;
   returnOperator?: string;
 }
-
-interface OperationLogQuery {
-  page?: number;
-  pageSize?: number;
-  targetType?: string;
-  action?: string;
-  operator?: string;
-  startDate?: string;
-  endDate?: string;
-}
-
-const createOperationLog = async (
-  targetType: string,
-  targetId: string,
-  action: string,
-  description?: string,
-  operator?: string,
-  beforeData?: any,
-  afterData?: any,
-  ip?: string,
-  userAgent?: string
-) => {
-  try {
-    await prisma.operationLog.create({
-      data: {
-        targetType,
-        targetId,
-        action,
-        description,
-        operator,
-        beforeData: beforeData ? JSON.stringify(beforeData) : null,
-        afterData: afterData ? JSON.stringify(afterData) : null,
-        ip,
-        userAgent,
-      },
-    });
-  } catch (error) {
-    console.error('创建操作日志失败:', error);
-  }
-};
 
 export default async function (fastify: FastifyInstance) {
   const getFileType = (mimeType?: string, fileName?: string): string => {
@@ -324,6 +296,52 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
+    await logCreate(
+      TargetType.EVIDENCE,
+      evidence.id,
+      `创建证据：${evidenceNumber} - ${evidence.name}`,
+      request,
+      evidence.collector,
+      {
+        id: evidence.id,
+        evidenceNumber: evidence.evidenceNumber,
+        name: evidence.name,
+        type: evidence.type,
+        status: evidence.status,
+        collector: evidence.collector,
+        caseId: evidence.caseId,
+        clueId: evidence.clueId,
+      }
+    );
+
+    if (evidence.caseId) {
+      await logAssociate(
+        TargetType.CASE,
+        evidence.caseId,
+        `新增关联证据：${evidenceNumber} - ${evidence.name}`,
+        request,
+        {
+          evidenceId: evidence.id,
+          evidenceNumber: evidence.evidenceNumber,
+          evidenceName: evidence.name,
+        }
+      );
+    }
+
+    if (evidence.clueId) {
+      await logAssociate(
+        TargetType.CLUE,
+        evidence.clueId,
+        `新增关联证据：${evidenceNumber} - ${evidence.name}`,
+        request,
+        {
+          evidenceId: evidence.id,
+          evidenceNumber: evidence.evidenceNumber,
+          evidenceName: evidence.name,
+        }
+      );
+    }
+
     return transformEvidence(evidence);
   });
 
@@ -382,12 +400,63 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
+    await logCreate(
+      TargetType.EVIDENCE,
+      evidence.id,
+      `上传证据：${evidenceNumber} - ${evidence.name}`,
+      request,
+      result.collector,
+      {
+        id: evidence.id,
+        evidenceNumber: evidence.evidenceNumber,
+        name: evidence.name,
+        type: evidence.type,
+        status: evidence.status,
+        fileSize: evidence.fileSize,
+        mimeType: evidence.mimeType,
+        caseId: evidence.caseId,
+        clueId: evidence.clueId,
+      }
+    );
+
+    if (evidence.caseId) {
+      await logAssociate(
+        TargetType.CASE,
+        evidence.caseId,
+        `新增关联证据：${evidenceNumber} - ${evidence.name}`,
+        request,
+        {
+          evidenceId: evidence.id,
+          evidenceNumber: evidence.evidenceNumber,
+          evidenceName: evidence.name,
+        }
+      );
+    }
+
+    if (evidence.clueId) {
+      await logAssociate(
+        TargetType.CLUE,
+        evidence.clueId,
+        `新增关联证据：${evidenceNumber} - ${evidence.name}`,
+        request,
+        {
+          evidenceId: evidence.id,
+          evidenceNumber: evidence.evidenceNumber,
+          evidenceName: evidence.name,
+        }
+      );
+    }
+
     return transformEvidence(evidence);
   });
 
   fastify.put('/:id', async (request: FastifyRequest<{ Params: { id: string }; Body: EvidenceUpdate }>, reply) => {
     const data = request.body;
     try {
+      const beforeEvidence = await prisma.evidence.findUnique({
+        where: { id: request.params.id },
+      });
+
       const evidence = await prisma.evidence.update({
         where: { id: request.params.id },
         data: {
@@ -395,6 +464,93 @@ export default async function (fastify: FastifyInstance) {
           collectTime: data.collectionTime ? new Date(data.collectionTime) : data.collectTime ? new Date(data.collectTime) : undefined,
         },
       });
+
+      await logUpdate(
+        TargetType.EVIDENCE,
+        evidence.id,
+        `更新证据：${evidence.evidenceNumber} - ${evidence.name}`,
+        request,
+        {
+          name: beforeEvidence?.name,
+          type: beforeEvidence?.type,
+          status: beforeEvidence?.status,
+          description: beforeEvidence?.description,
+          collector: beforeEvidence?.collector,
+          caseId: beforeEvidence?.caseId,
+          clueId: beforeEvidence?.clueId,
+          location: beforeEvidence?.location,
+        },
+        {
+          name: evidence.name,
+          type: evidence.type,
+          status: evidence.status,
+          description: evidence.description,
+          collector: evidence.collector,
+          caseId: evidence.caseId,
+          clueId: evidence.clueId,
+          location: evidence.location,
+        },
+        evidence.collector
+      );
+
+      if (beforeEvidence?.caseId !== evidence.caseId) {
+        if (beforeEvidence?.caseId) {
+          await logDisassociate(
+            TargetType.CASE,
+            beforeEvidence.caseId,
+            `移除关联证据：${beforeEvidence.evidenceNumber} - ${beforeEvidence.name}`,
+            request,
+            {
+              evidenceId: evidence.id,
+              evidenceNumber: evidence.evidenceNumber,
+              evidenceName: evidence.name,
+            }
+          );
+        }
+        if (evidence.caseId) {
+          await logAssociate(
+            TargetType.CASE,
+            evidence.caseId,
+            `新增关联证据：${evidence.evidenceNumber} - ${evidence.name}`,
+            request,
+            {
+              evidenceId: evidence.id,
+              evidenceNumber: evidence.evidenceNumber,
+              evidenceName: evidence.name,
+            }
+          );
+        }
+      }
+
+      if (beforeEvidence?.clueId !== evidence.clueId) {
+        if (beforeEvidence?.clueId) {
+          await logDisassociate(
+            TargetType.CLUE,
+            beforeEvidence.clueId,
+            `移除关联证据：${beforeEvidence.evidenceNumber} - ${beforeEvidence.name}`,
+            request,
+            {
+              evidenceId: evidence.id,
+              evidenceNumber: evidence.evidenceNumber,
+              evidenceName: evidence.name,
+            }
+          );
+        }
+        if (evidence.clueId) {
+          await logAssociate(
+            TargetType.CLUE,
+            evidence.clueId,
+            `新增关联证据：${evidence.evidenceNumber} - ${evidence.name}`,
+            request,
+            {
+              evidenceId: evidence.id,
+              evidenceNumber: evidence.evidenceNumber,
+              evidenceName: evidence.name,
+            }
+          );
+        }
+      }
+
       return transformEvidence(evidence);
     } catch (error) {
       reply.status(404).send({ error: '证据不存在' });
@@ -407,16 +563,68 @@ export default async function (fastify: FastifyInstance) {
         where: { id: request.params.id },
       });
 
-      if (evidence && evidence.filePath) {
+      if (!evidence) {
+        reply.status(404).send({ error: '证据不存在' });
+        return;
+      }
+
+      if (evidence.filePath) {
         const localPath = path.join(__dirname, '..', '..', evidence.filePath);
         if (fs.existsSync(localPath)) {
           fs.unlinkSync(localPath);
         }
       }
 
+      const caseId = evidence.caseId;
+      const clueId = evidence.clueId;
+
       await prisma.evidence.delete({
         where: { id: request.params.id },
       });
+
+      await logDelete(
+        TargetType.EVIDENCE,
+        request.params.id,
+        `删除证据：${evidence.evidenceNumber} - ${evidence.name}`,
+        request,
+        {
+          id: evidence.id,
+          evidenceNumber: evidence.evidenceNumber,
+          name: evidence.name,
+          type: evidence.type,
+          status: evidence.status,
+          caseId: evidence.caseId,
+          clueId: evidence.clueId,
+        }
+      );
+
+      if (caseId) {
+        await logDisassociate(
+          TargetType.CASE,
+          caseId,
+          `移除关联证据：${evidence.evidenceNumber} - ${evidence.name}`,
+          request,
+          {
+            evidenceId: evidence.id,
+            evidenceNumber: evidence.evidenceNumber,
+            evidenceName: evidence.name,
+          }
+        );
+      }
+
+      if (clueId) {
+        await logDisassociate(
+          TargetType.CLUE,
+          clueId,
+          `移除关联证据：${evidence.evidenceNumber} - ${evidence.name}`,
+          request,
+          {
+            evidenceId: evidence.id,
+            evidenceNumber: evidence.evidenceNumber,
+            evidenceName: evidence.name,
+          }
+        );
+      }
 
       return { success: true };
     } catch (error) {
@@ -530,21 +738,20 @@ export default async function (fastify: FastifyInstance) {
         },
       });
 
-      await createOperationLog(
-        'evidence',
-        request.params.id,
-        'borrow',
-        `证据借阅：借阅人 ${data.borrower}，借阅原因：${data.borrowReason}`,
-        data.operator,
+      await createOperationLog({
+        targetType: TargetType.EVIDENCE,
+        targetId: request.params.id,
+        action: ActionType.BORROW,
+        description: `证据借阅：借阅人 ${data.borrower}，借阅原因：${data.borrowReason}`,
+        operator: data.operator,
         beforeData,
-        {
+        afterData: {
           borrowStatus: '借阅中',
           currentBorrower: data.borrower,
           borrowTime: new Date().toISOString(),
         },
-        request.ip,
-        request.headers['user-agent']
-      );
+        ...getRequestMeta(request),
+      });
 
       return borrowRecord;
     } catch (error) {
@@ -612,21 +819,20 @@ export default async function (fastify: FastifyInstance) {
         },
       });
 
-      await createOperationLog(
-        'evidence',
-        request.params.id,
-        'return',
-        `证据归还：${data.returnNote ? '归还备注：' + data.returnNote : '已归还'}`,
-        data.returnOperator,
+      await createOperationLog({
+        targetType: TargetType.EVIDENCE,
+        targetId: request.params.id,
+        action: ActionType.RETURN,
+        description: `证据归还：${data.returnNote ? '归还备注：' + data.returnNote : '已归还'}`,
+        operator: data.returnOperator,
         beforeData,
-        {
+        afterData: {
           borrowStatus: '已归还',
           currentBorrower: null,
           borrowTime: null,
         },
-        request.ip,
-        request.headers['user-agent']
-      );
+        ...getRequestMeta(request),
+      });
 
       return borrowRecord;
     } catch (error) {
@@ -657,58 +863,6 @@ export default async function (fastify: FastifyInstance) {
         },
       }),
       prisma.evidenceBorrow.count({ where }),
-    ]);
-
-    return { items, total, page, pageSize };
-  });
-
-  fastify.get('/:id/operation-logs', async (request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: number; pageSize?: number } }>, reply) => {
-    const { page = 1, pageSize = 20 } = request.query;
-    const skip = (page - 1) * pageSize;
-
-    const [items, total] = await Promise.all([
-      prisma.operationLog.findMany({
-        where: {
-          targetType: 'evidence',
-          targetId: request.params.id,
-        },
-        skip,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.operationLog.count({
-        where: {
-          targetType: 'evidence',
-          targetId: request.params.id,
-        },
-      }),
-    ]);
-
-    return { items, total, page, pageSize };
-  });
-
-  fastify.get('/operation-logs/all', async (request: FastifyRequest<{ Querystring: OperationLogQuery }>, reply) => {
-    const { page = 1, pageSize = 20, targetType, action, operator, startDate, endDate } = request.query;
-    const skip = (page - 1) * pageSize;
-
-    const where: any = {};
-    if (targetType) where.targetType = targetType;
-    if (action) where.action = action;
-    if (operator) where.operator = { contains: operator, mode: 'insensitive' };
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
-
-    const [items, total] = await Promise.all([
-      prisma.operationLog.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.operationLog.count({ where }),
     ]);
 
     return { items, total, page, pageSize };
@@ -876,6 +1030,53 @@ export default async function (fastify: FastifyInstance) {
       data: { successCount, failCount },
     });
 
+    await createOperationLog({
+      targetType: TargetType.EVIDENCE_BATCH,
+      targetId: batch.id,
+      action: ActionType.BATCH_UPLOAD,
+      description: `批量上传证据：${batch.batchNumber} - ${batch.name}，共${files.length}份，成功${successCount}份，失败${failCount}份`,
+      operator: metadata.operator,
+      afterData: {
+        batchId: batch.id,
+        batchNumber: batch.batchNumber,
+        batchName: batch.name,
+        totalCount: files.length,
+        successCount,
+        failCount,
+        caseId: batch.caseId,
+        clueId: batch.clueId,
+      },
+      ...getRequestMeta(request),
+    });
+
+    if (batch.caseId) {
+      await logAssociate(
+        TargetType.CASE,
+        batch.caseId,
+        `批量上传证据：${batch.batchNumber}，共${successCount}份证据`,
+        request,
+        {
+          batchId: batch.id,
+          batchNumber: batch.batchNumber,
+          evidenceCount: successCount,
+        }
+      );
+    }
+
+    if (batch.clueId) {
+      await logAssociate(
+        TargetType.CLUE,
+        batch.clueId,
+        `批量上传证据：${batch.batchNumber}，共${successCount}份证据`,
+        request,
+        {
+          batchId: batch.id,
+          batchNumber: batch.batchNumber,
+          evidenceCount: successCount,
+        }
+      );
+    }
+
     return {
       batch: {
         id: batch.id,
@@ -953,6 +1154,10 @@ export default async function (fastify: FastifyInstance) {
         return;
       }
 
+      const caseId = batch.caseId;
+      const clueId = batch.clueId;
+      const evidenceIds = batch.evidences.map(e => e.id);
+
       for (const evidence of batch.evidences) {
         if (evidence.filePath) {
           const localPath = path.join(__dirname, '..', '..', evidence.filePath);
@@ -965,6 +1170,49 @@ export default async function (fastify: FastifyInstance) {
       await prisma.evidenceBatch.delete({
         where: { id: request.params.id },
       });
+
+      await logDelete(
+        TargetType.EVIDENCE_BATCH,
+        request.params.id,
+        `删除证据批次：${batch.batchNumber} - ${batch.name}，共${batch.evidences.length}份证据`,
+        request,
+        {
+          id: batch.id,
+          batchNumber: batch.batchNumber,
+          name: batch.name,
+          evidenceCount: batch.evidences.length,
+          caseId: batch.caseId,
+          clueId: batch.clueId,
+        }
+      );
+
+      if (caseId) {
+        await logDisassociate(
+          TargetType.CASE,
+          caseId,
+          `删除证据批次：${batch.batchNumber}，共${batch.evidences.length}份证据`,
+          request,
+          {
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            evidenceCount: batch.evidences.length,
+          }
+        );
+      }
+
+      if (clueId) {
+        await logDisassociate(
+          TargetType.CLUE,
+          clueId,
+          `删除证据批次：${batch.batchNumber}，共${batch.evidences.length}份证据`,
+          request,
+          {
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            evidenceCount: batch.evidences.length,
+          }
+        );
+      }
 
       return { success: true };
     } catch (error) {

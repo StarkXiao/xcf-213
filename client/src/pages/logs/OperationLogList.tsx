@@ -63,7 +63,7 @@ interface OperationLogItem {
   };
 }
 
-const targetTypeConfig: Record<string, { label: string; color: string; icon: React.ReactNode; navigatePrefix: string }> = {
+const targetTypeConfig: Record<string, { label: string; color: string; icon: React.ReactNode; navigatePrefix?: string }> = {
   CASE: {
     label: '案件',
     color: 'geekblue',
@@ -88,6 +88,21 @@ const targetTypeConfig: Record<string, { label: string; color: string; icon: Rea
     icon: <TeamOutlined />,
     navigatePrefix: '/persons',
   },
+  EVIDENCE_BATCH: {
+    label: '证据批次',
+    color: 'purple',
+    icon: <PaperClipOutlined />,
+  },
+  EVIDENCE_BORROW: {
+    label: '借阅记录',
+    color: 'orange',
+    icon: <PaperClipOutlined />,
+  },
+  CLUE_VERIFICATION: {
+    label: '线索核查',
+    color: 'volcano',
+    icon: <ClueSearchIcon />,
+  },
 };
 
 const actionConfig: Record<string, { label: string; color: string }> = {
@@ -101,6 +116,11 @@ const actionConfig: Record<string, { label: string; color: string }> = {
   VERIFY: { label: '核查', color: 'magenta' },
   ASSOCIATE: { label: '关联', color: 'gold' },
   DISASSOCIATE: { label: '解除关联', color: 'default' },
+  BATCH_ASSIGN: { label: '批量指派', color: 'geekblue' },
+  BATCH_RETURN: { label: '批量退回', color: 'orange' },
+  BATCH_MERGE: { label: '批量合并', color: 'purple' },
+  BATCH_UPLOAD: { label: '批量上传', color: 'green' },
+  TO_EVIDENCE: { label: '转证据', color: 'volcano' },
 };
 
 export default function OperationLogList() {
