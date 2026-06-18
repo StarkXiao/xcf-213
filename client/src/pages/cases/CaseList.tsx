@@ -1,10 +1,38 @@
-import { useState, useEffect } from 'react';
-import { Table, Button, Space, Input, Select, DatePicker, Tag, Popconfirm, Modal, Form, message, Card, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useState, useEffect, useMemo } from 'react';
+import { Table, Button, Space, Input, Select, DatePicker, Tag, Popconfirm, Modal, Form, message, Card, Row, Col, Badge, Tooltip, List, Divider } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, SearchOutlined, ReloadOutlined, WarningOutlined, ExclamationCircleOutlined, ClockCircleOutlined, FileProtectOutlined, BellOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import type { ColumnsType } from 'antd/es/table';
 import { caseApi, searchApi } from '../../services/api';
+
+interface WarningDetail {
+  id?: string;
+  title?: string;
+  clueNumber?: string;
+  status?: string;
+  lastUpdate?: string;
+  daysOverdue?: number;
+  days?: number;
+  credibility?: string;
+  importance?: string;
+  subType?: string;
+  label?: string;
+  description?: string;
+  clueId?: string;
+  clueTitle?: string;
+  borrowId?: string;
+  evidenceId?: string;
+  borrower?: string;
+}
+
+interface WarningItem {
+  type: 'overdueClue' | 'missingEvidence' | 'pendingTask';
+  label: string;
+  level: 'danger' | 'warning';
+  count: number;
+  detail: WarningDetail[];
+}
 
 interface CaseItem {
   id: string;
@@ -17,6 +45,9 @@ interface CaseItem {
   location: string;
   occurTime: string;
   createdAt: string;
+  warnings: WarningItem[];
+  warningCount: number;
+  hasWarning: boolean;
   _count: {
     clues: number;
     evidences: number;
@@ -40,6 +71,17 @@ const priorityColors: Record<string, string> = {
   '一般': 'green',
 };
 
+const warningTypeIcons: Record<string, any> = {
+  overdueClue: <ClockCircleOutlined />,
+  missingEvidence: <FileProtectOutlined />,
+  pendingTask: <BellOutlined />,
+};
+
+const warningLevelColors: Record<string, string> = {
+  danger: 'red',
+  warning: 'orange',
+};
+
 export default function CaseList() {
   const navigate = useNavigate();
   const [form] = Form.useForm();
@@ -47,6 +89,9 @@ export default function CaseList() {
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [options, setOptions] = useState<any>({});
+  const [warningModalVisible, setWarningModalVisible] = useState(false);
+  const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
+  const [warningFilter, setWarningFilter] = useState<string | null>(null);
 
   useEffect(() => {
     loadOptions();
@@ -80,6 +125,36 @@ export default function CaseList() {
     }
   };
 
+  const warningStats = useMemo(() => {
+    const stats = {
+      totalWarningCases: 0,
+      overdueClueCount: 0,
+      missingEvidenceCount: 0,
+      pendingTaskCount: 0,
+      dangerCount: 0,
+      warningCount: 0,
+    };
+    data.forEach(item => {
+      if (item.hasWarning) {
+        stats.totalWarningCases++;
+      }
+      item.warnings.forEach(w => {
+        if (w.type === 'overdueClue') stats.overdueClueCount += w.count;
+        if (w.type === 'missingEvidence') stats.missingEvidenceCount += w.count;
+        if (w.type === 'pendingTask') stats.pendingTaskCount += w.count;
+        if (w.level === 'danger') stats.dangerCount += w.count;
+        if (w.level === 'warning') stats.warningCount += w.count;
+      });
+    });
+    return stats;
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    if (!warningFilter) return data;
+    if (warningFilter === 'all') return data.filter(d => d.hasWarning);
+    return data.filter(d => d.warnings.some(w => w.type === warningFilter));
+  }, [data, warningFilter]);
+
   const handleSearch = (values: any) => {
     const filters: any = {};
     if (values.keyword) filters.keyword = values.keyword;
@@ -96,6 +171,7 @@ export default function CaseList() {
 
   const handleReset = () => {
     form.resetFields();
+    setWarningFilter(null);
     setPagination(prev => ({ ...prev, current: 1 }));
     loadData();
   };
@@ -110,13 +186,203 @@ export default function CaseList() {
     }
   };
 
+  const openWarningDetail = (record: CaseItem) => {
+    setSelectedCase(record);
+    setWarningModalVisible(true);
+  };
+
+  const renderWarningBadges = (record: CaseItem) => {
+    if (!record.hasWarning) {
+      return <span style={{ color: '#999' }}>—</span>;
+    }
+    return (
+      <Space size={4} wrap>
+        {record.warnings.map((w, idx) => (
+          <Tooltip
+            key={idx}
+            title={`${w.label}: ${w.count}项`}
+          >
+            <Badge
+              count={w.count}
+              style={{
+                backgroundColor: w.level === 'danger' ? '#ff4d4f' : '#fa8c16',
+                cursor: 'pointer',
+              }}
+              showZero
+              offset={[2, 0]}
+            >
+              <Tag
+                icon={warningTypeIcons[w.type]}
+                color={warningLevelColors[w.level]}
+                style={{ margin: 0, cursor: 'pointer' }}
+                onClick={() => openWarningDetail(record)}
+              >
+                {w.label}
+              </Tag>
+            </Badge>
+          </Tooltip>
+        ))}
+      </Space>
+    );
+  };
+
+  const renderWarningDetail = () => {
+    if (!selectedCase) return null;
+
+    return (
+      <div>
+        <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
+          <div><strong>案件编号：</strong>{selectedCase.caseNumber}</div>
+          <div><strong>案件标题：</strong>{selectedCase.title}</div>
+        </div>
+
+        {selectedCase.warnings.map((w, idx) => (
+          <div key={idx} style={{ marginBottom: idx < selectedCase.warnings.length - 1 ? 16 : 0 }}>
+            <Divider orientation="left" style={{ margin: '8px 0' }}>
+              <Tag color={warningLevelColors[w.level]} icon={warningTypeIcons[w.type]}>
+                {w.label}（{w.count}项）
+              </Tag>
+            </Divider>
+
+            {w.type === 'overdueClue' && (
+              <List
+                size="small"
+                dataSource={w.detail}
+                renderItem={(item: WarningDetail) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={<WarningOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />}
+                      title={
+                        <Space>
+                          <a onClick={() => navigate(`/clues/${item.id}`)}>{item.clueNumber}</a>
+                          <span style={{ color: '#666' }}>{item.title}</span>
+                        </Space>
+                      }
+                      description={
+                        <Space size="middle">
+                          <Tag color="default">状态：{item.status}</Tag>
+                          <span style={{ color: '#ff4d4f' }}>
+                            超期 {item.daysOverdue} 天未更新
+                          </span>
+                          <span style={{ color: '#999', fontSize: 12 }}>
+                            最后更新：{moment(item.lastUpdate).format('YYYY-MM-DD HH:mm')}
+                          </span>
+                        </Space>
+                      }
+                    />
+                    <Button type="link" size="small" onClick={() => navigate(`/clues/${item.id}`)}>
+                      去处理
+                    </Button>
+                  </List.Item>
+                )}
+              />
+            )}
+
+            {w.type === 'missingEvidence' && (
+              <List
+                size="small"
+                dataSource={w.detail}
+                renderItem={(item: WarningDetail) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={<FileProtectOutlined style={{ color: '#fa8c16', fontSize: 20 }} />}
+                      title={
+                        <Space>
+                          <a onClick={() => navigate(`/clues/${item.id}`)}>{item.clueNumber}</a>
+                          <span style={{ color: '#666' }}>{item.title}</span>
+                        </Space>
+                      }
+                      description={
+                        <Space size="middle">
+                          <Tag color="default">状态：{item.status}</Tag>
+                          <Tag color={item.importance === '关键' ? 'red' : item.importance === '重要' ? 'orange' : 'blue'}>
+                            重要性：{item.importance}
+                          </Tag>
+                          <span style={{ color: '#fa8c16' }}>未回填证据</span>
+                        </Space>
+                      }
+                    />
+                    <Button type="link" size="small" onClick={() => navigate(`/clues/${item.id}`)}>
+                      上传证据
+                    </Button>
+                  </List.Item>
+                )}
+              />
+            )}
+
+            {w.type === 'pendingTask' && (
+              <List
+                size="small"
+                dataSource={w.detail}
+                renderItem={(item: WarningDetail) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={
+                        item.days! >= 5
+                          ? <ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
+                          : <BellOutlined style={{ color: '#fa8c16', fontSize: 20 }} />
+                      }
+                      title={<Tag color={item.days! >= 5 ? 'red' : 'orange'}>{item.label}</Tag>}
+                      description={
+                        <Space direction="vertical" size={4}>
+                          <span>{item.description}</span>
+                          {item.clueId && (
+                            <span style={{ color: '#999', fontSize: 12 }}>
+                              线索：<a onClick={() => navigate(`/clues/${item.clueId}`)}>{item.clueNumber} - {item.clueTitle}</a>
+                            </span>
+                          )}
+                        </Space>
+                      }
+                    />
+                    <Space>
+                      {item.subType === 'casePendingFiling' && (
+                        <Button type="link" size="small" onClick={() => navigate(`/cases/${selectedCase.id}/edit`)}>
+                          立案处理
+                        </Button>
+                      )}
+                      {item.subType === 'cluePendingVerify' && item.clueId && (
+                        <Button type="link" size="small" onClick={() => navigate(`/clues/${item.clueId}`)}>
+                          核实线索
+                        </Button>
+                      )}
+                      {(item.subType === 'evidenceOverdueReturn' || item.subType === 'evidenceLongBorrow') && (
+                        <Button type="link" size="small" onClick={() => navigate('/evidences')}>
+                          查看证据
+                        </Button>
+                      )}
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const columns: ColumnsType<CaseItem> = [
     {
       title: '案件编号',
       dataIndex: 'caseNumber',
       key: 'caseNumber',
       width: 140,
-      render: (text) => <span style={{ color: '#1677ff', fontFamily: 'monospace' }}>{text}</span>,
+      fixed: 'left',
+      render: (text, record) => (
+        <Space>
+          <span style={{ color: '#1677ff', fontFamily: 'monospace' }}>{text}</span>
+          {record.hasWarning && (
+            <Tooltip title={`存在 ${record.warningCount} 项预警`}>
+              <Badge
+                count={record.warningCount}
+                style={{
+                  backgroundColor: record.warnings.some(w => w.level === 'danger') ? '#ff4d4f' : '#fa8c16',
+                }}
+              />
+            </Tooltip>
+          )}
+        </Space>
+      ),
     },
     {
       title: '案件标题',
@@ -149,6 +415,16 @@ export default function CaseList() {
       render: (text) => <Tag color={statusColors[text]}>{text}</Tag>,
     },
     {
+      title: '临期预警',
+      key: 'warnings',
+      width: 300,
+      render: (_, record) => renderWarningBadges(record),
+      onCell: (record) => ({
+        onClick: record.hasWarning ? () => openWarningDetail(record) : undefined,
+        style: record.hasWarning ? { cursor: 'pointer' } : {},
+      }),
+    },
+    {
       title: '关联信息',
       key: 'stats',
       width: 150,
@@ -178,6 +454,7 @@ export default function CaseList() {
       title: '操作',
       key: 'action',
       width: 180,
+      fixed: 'right',
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/cases/${record.id}`)}>
@@ -196,6 +473,45 @@ export default function CaseList() {
     },
   ];
 
+  const statCards = [
+    {
+      title: '预警案件数',
+      value: warningStats.totalWarningCases,
+      icon: <WarningOutlined />,
+      color: '#722ed1',
+      bgColor: '#f9f0ff',
+      filterKey: 'all',
+      show: warningStats.totalWarningCases > 0,
+    },
+    {
+      title: '超期未更新线索',
+      value: warningStats.overdueClueCount,
+      icon: <ClockCircleOutlined />,
+      color: '#ff4d4f',
+      bgColor: '#fff1f0',
+      filterKey: 'overdueClue',
+      show: warningStats.overdueClueCount > 0,
+    },
+    {
+      title: '未回填证据',
+      value: warningStats.missingEvidenceCount,
+      icon: <FileProtectOutlined />,
+      color: '#fa8c16',
+      bgColor: '#fff7e6',
+      filterKey: 'missingEvidence',
+      show: warningStats.missingEvidenceCount > 0,
+    },
+    {
+      title: '待办任务',
+      value: warningStats.pendingTaskCount,
+      icon: <BellOutlined />,
+      color: '#1677ff',
+      bgColor: '#e6f4ff',
+      filterKey: 'pendingTask',
+      show: warningStats.pendingTaskCount > 0,
+    },
+  ];
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -204,6 +520,47 @@ export default function CaseList() {
           新增案件
         </Button>
       </div>
+
+      {warningStats.totalWarningCases > 0 && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {statCards.filter(c => c.show).map((card, index) => (
+            <Col xs={24} sm={12} md={6} key={index}>
+              <div
+                onClick={() => setWarningFilter(card.filterKey === warningFilter ? null : card.filterKey)}
+                style={{
+                  padding: 16,
+                  borderRadius: 8,
+                  background: card.bgColor,
+                  border: warningFilter === card.filterKey ? `2px solid ${card.color}` : '2px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div>
+                  <div style={{ color: '#666', fontSize: 13, marginBottom: 4 }}>{card.title}</div>
+                  <div style={{ color: card.color, fontSize: 28, fontWeight: 'bold' }}>{card.value}</div>
+                </div>
+                <div style={{ fontSize: 36, color: card.color, opacity: 0.8 }}>{card.icon}</div>
+              </div>
+            </Col>
+          ))}
+          {warningFilter && (
+            <Col xs={24} style={{ marginTop: -8 }}>
+              <Tag
+                color="blue"
+                closable
+                onClose={() => setWarningFilter(null)}
+                style={{ padding: '4px 12px' }}
+              >
+                当前仅显示存在预警的案件，点击清除筛选
+              </Tag>
+            </Col>
+          )}
+        </Row>
+      )}
 
       <Card className="card-shadow" style={{ marginBottom: 16 }}>
         <Form form={form} layout="inline" onFinish={handleSearch}>
@@ -248,19 +605,55 @@ export default function CaseList() {
       <Card className="card-shadow">
         <Table
           columns={columns}
-          dataSource={data}
+          dataSource={filteredData}
           rowKey="id"
           loading={loading}
           pagination={{
             ...pagination,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 条记录`,
+            showTotal: (total) => `共 ${total} 条记录${warningFilter ? `（已筛选出 ${filteredData.length} 条预警案件）` : ''}`,
             onChange: (page, pageSize) => setPagination({ current: page, pageSize, total: pagination.total }),
           }}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1500 }}
+          rowClassName={(record) => record.hasWarning ? 'warning-row' : ''}
         />
       </Card>
+
+      <Modal
+        title={
+          <Space>
+            <WarningOutlined style={{ color: '#ff4d4f' }} />
+            <span>临期预警详情 - {selectedCase?.caseNumber}</span>
+          </Space>
+        }
+        open={warningModalVisible}
+        onCancel={() => setWarningModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setWarningModalVisible(false)}>
+            关闭
+          </Button>,
+          <Button key="detail" type="primary" onClick={() => {
+            setWarningModalVisible(false);
+            navigate(`/cases/${selectedCase?.id}`);
+          }}>
+            查看案件详情
+          </Button>,
+        ]}
+        width={720}
+        destroyOnClose
+      >
+        {renderWarningDetail()}
+      </Modal>
+
+      <style>{`
+        .warning-row {
+          background: linear-gradient(90deg, #fff7e6 0%, transparent 30%);
+        }
+        .warning-row:hover > td {
+          background: #fffbe6 !important;
+        }
+      `}</style>
     </div>
   );
 }
