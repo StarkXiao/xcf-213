@@ -247,6 +247,17 @@ export default async function (fastify: FastifyInstance) {
     }
 
     try {
+      const cluesBefore = await prisma.clue.findMany({
+        where: { id: { in: clueIds } },
+        select: { id: true, caseId: true },
+      });
+
+      const sourceCaseIds: string[] = [...new Set<string>(
+        cluesBefore
+          .filter((c: any) => c.caseId && c.caseId !== caseId)
+          .map((c: any) => c.caseId as string)
+      )];
+
       const updateData: any = { caseId };
       if (handler) updateData.handler = handler;
       if (status) updateData.status = status;
@@ -257,6 +268,10 @@ export default async function (fastify: FastifyInstance) {
       });
 
       await updateCaseSummary(caseId);
+
+      for (const cid of sourceCaseIds) {
+        await updateCaseSummary(cid);
+      }
 
       const clues = await prisma.clue.findMany({
         where: { id: { in: clueIds } },
@@ -277,26 +292,40 @@ export default async function (fastify: FastifyInstance) {
     }
 
     try {
-      const clues = await prisma.clue.findMany({
+      const cluesBefore = await prisma.clue.findMany({
         where: { id: { in: clueIds } },
-        select: { id: true, caseId: true },
+        select: { id: true, caseId: true, note: true },
       });
 
-      const caseIds = [...new Set(clues.filter((c: any) => c.caseId).map((c: any) => c.caseId as string))];
+      const sourceCaseIds: string[] = [...new Set<string>(
+        cluesBefore
+          .filter((c: any) => c.caseId)
+          .map((c: any) => c.caseId as string)
+      )];
 
-      const updateData: any = { status: '待核实', caseId: null };
       if (note) {
-        updateData.note = {
-          set: (oldNote: string | null) => oldNote ? `${oldNote}\n\n[退回说明] ${new Date().toLocaleString('zh-CN')}\n${note}` : `[退回说明] ${new Date().toLocaleString('zh-CN')}\n${note}`,
-        };
+        const timestamp = new Date().toLocaleString('zh-CN');
+        const returnNotePrefix = `\n\n[退回说明] ${timestamp}\n${note}`;
+
+        for (const clue of cluesBefore) {
+          const oldNote = (clue as any).note || '';
+          await prisma.clue.update({
+            where: { id: clue.id },
+            data: {
+              caseId: null,
+              status: '待核实',
+              note: oldNote ? `${oldNote}${returnNotePrefix}` : returnNotePrefix.trim(),
+            },
+          });
+        }
+      } else {
+        await prisma.clue.updateMany({
+          where: { id: { in: clueIds } },
+          data: { caseId: null, status: '待核实' },
+        });
       }
 
-      await prisma.clue.updateMany({
-        where: { id: { in: clueIds } },
-        data: { caseId: null, status: '待核实' },
-      });
-
-      for (const cid of caseIds as string[]) {
+      for (const cid of sourceCaseIds) {
         await updateCaseSummary(cid);
       }
 
@@ -335,20 +364,26 @@ export default async function (fastify: FastifyInstance) {
         include: { evidences: true, cluePersons: true },
       });
 
+      const affectedCaseIds = new Set<string>();
+      if (targetClue.caseId) affectedCaseIds.add(targetClue.caseId);
+      for (const clue of sourceClues) {
+        if (clue.caseId) affectedCaseIds.add(clue.caseId);
+      }
+
       let mergedContent = targetClue.content;
-      const mergedPersonIds = new Set<string>();
-      const mergedEvidenceIds = new Set<string>();
 
       for (const clue of sourceClues) {
         mergedContent += `\n\n=== 合并自线索 ${clue.clueNumber} ===\n${clue.content}`;
-        clue.cluePersons.forEach((cp: any) => mergedPersonIds.add(cp.personId));
-        clue.evidences.forEach((e: any) => mergedEvidenceIds.add(e.id));
         if (clue.caseId && !targetClue.caseId) {
           targetClue.caseId = clue.caseId;
         }
       }
 
       const finalCaseId = caseId || targetClue.caseId;
+
+      if (finalCaseId) {
+        affectedCaseIds.add(finalCaseId);
+      }
 
       await prisma.$transaction([
         prisma.clue.update({
@@ -372,8 +407,8 @@ export default async function (fastify: FastifyInstance) {
         }),
       ]);
 
-      if (finalCaseId) {
-        await updateCaseSummary(finalCaseId);
+      for (const cid of affectedCaseIds) {
+        await updateCaseSummary(cid);
       }
 
       const resultClue = await prisma.clue.findUnique({
@@ -406,6 +441,13 @@ export default async function (fastify: FastifyInstance) {
         where: { id: { in: clueIds } },
         include: { evidences: true, cluePersons: { include: { person: true } } },
       });
+
+      const sourceCaseIds = new Set<string>();
+      for (const clue of clues) {
+        if (clue.caseId && clue.caseId !== caseId) {
+          sourceCaseIds.add(clue.caseId);
+        }
+      }
 
       const evidenceCount = await prisma.evidence.count();
       let currentCount = evidenceCount;
@@ -459,6 +501,10 @@ export default async function (fastify: FastifyInstance) {
       });
 
       await updateCaseSummary(caseId);
+
+      for (const cid of sourceCaseIds) {
+        await updateCaseSummary(cid);
+      }
 
       return { success: true, createdCount: createdEvidences.length, evidences: createdEvidences };
     } catch (error) {
